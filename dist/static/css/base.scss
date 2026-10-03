@@ -1,0 +1,52 @@
+view,
+input,
+textarea,
+scroll-view {
+  box-sizing: border-box;
+}
+
+view,
+text {
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "微软雅黑", Arial, sans-serif;
+}
+
+.container {
+  min-height: 100vh;
+}
+
+.flex-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-flow {
+  display: flex;
+  flex-flow: wrap;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  word-break: break-all;
+}
+
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+}
+
+.status-bar {
+  height: var(--status-bar-height);
+  width: 100%;
+}
