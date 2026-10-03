@@ -1,0 +1,12 @@
+{
+  "name": "monster-cloudflare-pages",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler pages dev .",
+    "d1:migrate": "wrangler d1 migrations apply monster-db --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
