@@ -2,16 +2,12 @@
 let currentCategory = 'all';
 let currentServiceType = 'all';
 let currentSort = 'default';
-let currentSlide = 0;
-let carouselInterval = null;
+let currentView = 'home';
 
 // 初始化应用
 document.addEventListener('DOMContentLoaded', function() {
     // 渲染产品列表
     renderProducts();
-    
-    // 初始化轮播图
-    initCarousel();
     
     // 更新购物车徽章
     cart.updateCartBadge();
@@ -29,72 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
     checkLoginStatus();
 });
 
-// 轮播图初始化
-function initCarousel() {
-    const track = document.getElementById('carouselTrack');
-    const dotsContainer = document.getElementById('carouselDots');
-    const slides = track.children;
-    
-    // 创建指示点
-    for (let i = 0; i < slides.length; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
-        dot.onclick = () => goToSlide(i);
-        dotsContainer.appendChild(dot);
-    }
-    
-    // 自动播放
-    carouselInterval = setInterval(nextSlide, 4000);
-    
-    // 触摸滑动支持
-    let startX = 0;
-    let endX = 0;
-    
-    track.addEventListener('touchstart', e => {
-        startX = e.touches[0].clientX;
-        clearInterval(carouselInterval);
-    });
-    
-    track.addEventListener('touchend', e => {
-        endX = e.changedTouches[0].clientX;
-        const diff = startX - endX;
-        if (Math.abs(diff) > 50) {
-            if (diff > 0) {
-                nextSlide();
-            } else {
-                prevSlide();
-            }
-        }
-        carouselInterval = setInterval(nextSlide, 4000);
-    });
-}
-
-// 轮播图导航
-function nextSlide() {
-    currentSlide = (currentSlide + 1) % document.querySelectorAll('.carousel-item').length;
-    updateCarousel();
-}
-
-function prevSlide() {
-    currentSlide = (currentSlide - 1 + document.querySelectorAll('.carousel-item').length) % document.querySelectorAll('.carousel-item').length;
-    updateCarousel();
-}
-
-function goToSlide(index) {
-    currentSlide = index;
-    updateCarousel();
-}
-
-function updateCarousel() {
-    const track = document.getElementById('carouselTrack');
-    const dots = document.querySelectorAll('.carousel-dot');
-    track.style.transform = `translateX(-${currentSlide * 100}%)`;
-    dots.forEach((dot, index) => {
-        dot.classList.toggle('active', index === currentSlide);
-    });
-}
-
-// 渲染产品列表
+// 渲染产品列表 - 2列网格布局
 function renderProducts() {
     const productList = document.getElementById('productList');
     let filteredProducts = [...products];
@@ -102,11 +33,6 @@ function renderProducts() {
     // 按分类筛选
     if (currentCategory !== 'all') {
         filteredProducts = filteredProducts.filter(p => p.game === currentCategory);
-    }
-    
-    // 按服务类型筛选
-    if (currentServiceType !== 'all') {
-        filteredProducts = filteredProducts.filter(p => p.serviceType === currentServiceType);
     }
     
     // 按搜索关键词筛选
@@ -120,51 +46,22 @@ function renderProducts() {
         );
     }
     
-    // 排序
-    switch (currentSort) {
-        case 'price':
-            filteredProducts.sort((a, b) => a.price - b.price);
-            break;
-        case 'rating':
-            filteredProducts.sort((a, b) => b.rating - a.rating);
-            break;
-        case 'sales':
-            filteredProducts.sort((a, b) => b.sales - a.sales);
-            break;
-    }
-    
-    // 渲染卡片
+    // 渲染卡片 - 2列网格
     productList.innerHTML = filteredProducts.map(product => `
         <div class="product-card" onclick="showProductDetail(${product.id})">
             <div class="product-image" style="background: ${product.image}">
-                <span class="product-level-badge">${product.level}</span>
-                <span class="product-game-badge">${product.gameIcon} ${product.gameName}</span>
+                <span class="product-badge">🔥 热销</span>
             </div>
             <div class="product-info">
-                <div class="product-header">
-                    <div>
-                        <div class="product-name">${product.name}</div>
-                        <div class="product-tags">
-                            ${product.tags.map(tag => `<span class="product-tag">${tag}</span>`).join('')}
-                        </div>
-                    </div>
-                    <div class="product-rating">★ ${product.rating}</div>
-                </div>
-                <div class="product-stats">
-                    <span>📈 胜率${product.winRate}%</span>
-                    <span>📊 销量${product.sales}</span>
-                    <span>⏱️ ${product.averageTime}h/单</span>
-                </div>
-                <div class="product-footer">
+                <div class="product-title">${product.name}</div>
+                <div class="product-desc">${product.description}</div>
+                <div class="product-bottom">
                     <div class="product-price">
                         <span class="price-symbol">¥</span>
                         <span class="price-value">${product.price}</span>
-                        <span class="price-unit">/小时</span>
-                        <span class="price-original">¥${product.originalPrice}</span>
+                        <span class="price-original">${product.originalPrice}</span>
                     </div>
-                    <button class="add-cart-btn" onclick="event.stopPropagation(); addToCart(${product.id})">
-                        + 预约
-                    </button>
+                    <span class="product-sales">已售:${formatNumber(product.sales)}</span>
                 </div>
             </div>
         </div>
@@ -172,7 +69,7 @@ function renderProducts() {
     
     if (filteredProducts.length === 0) {
         productList.innerHTML = `
-            <div class="empty-state">
+            <div class="empty-state" style="grid-column: span 2;">
                 <div class="empty-icon">🔍</div>
                 <p>未找到相关护航师</p>
                 <button class="btn-primary" onclick="resetFilters()">重置筛选</button>
@@ -181,47 +78,40 @@ function renderProducts() {
     }
 }
 
+// 格式化数字
+function formatNumber(num) {
+    if (num >= 10000) {
+        return (num / 10000).toFixed(1) + 'w';
+    }
+    return num.toString();
+}
+
 // 分类筛选
 function filterCategory(category) {
     currentCategory = category;
-    currentServiceType = 'all';
-    document.querySelectorAll('.category-item').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.service-type').forEach(item => item.classList.remove('active'));
-    event.target.closest('.category-item').classList.add('active');
-    renderProducts();
-}
-
-// 服务类型筛选
-function filterService(serviceType) {
-    currentServiceType = serviceType === 'all' ? 'all' : serviceType;
-    document.querySelectorAll('.service-type').forEach(item => item.classList.remove('active'));
-    event.target.closest('.service-type').classList.add('active');
-    renderProducts();
-}
-
-// 排序
-function sortBy(sortType) {
-    currentSort = sortType;
     document.querySelectorAll('.filter-item').forEach(item => item.classList.remove('active'));
     event.target.classList.add('active');
     renderProducts();
 }
 
-// 搜索
-function searchProducts(term) {
-    renderProducts();
+// 切换分类标签
+function switchCategory(type) {
+    document.querySelectorAll('.category-tabs .tab-item').forEach(tab => tab.classList.remove('active'));
+    event.target.closest('.tab-item').classList.add('active');
+    // 这里可以添加不同分类的逻辑
 }
 
 // 重置筛选
 function resetFilters() {
     currentCategory = 'all';
-    currentServiceType = 'all';
-    currentSort = 'default';
     document.getElementById('searchInput').value = '';
-    document.querySelectorAll('.category-item').forEach(item => item.classList.remove('active'));
-    document.querySelectorAll('.service-type').forEach(item => item.classList.remove('active'));
     document.querySelectorAll('.filter-item').forEach(item => item.classList.remove('active'));
     document.querySelector('.filter-item').classList.add('active');
+    renderProducts();
+}
+
+// 搜索
+function searchProducts(term) {
     renderProducts();
 }
 
@@ -250,7 +140,7 @@ function showProductDetail(productId) {
                 <div class="detail-stat-label">胜率</div>
             </div>
             <div class="detail-stat">
-                <div class="detail-stat-value">${product.sales}</div>
+                <div class="detail-stat-value">${formatNumber(product.sales)}</div>
                 <div class="detail-stat-label">销量</div>
             </div>
             <div class="detail-stat">
@@ -258,8 +148,8 @@ function showProductDetail(productId) {
                 <div class="detail-stat-label">段位</div>
             </div>
             <div class="detail-stat">
-                <div class="detail-stat-value">${product.averageTime}h</div>
-                <div class="detail-stat-label">平均时长</div>
+                <div class="detail-stat-value">${product.guarantee}</div>
+                <div class="detail-stat-label">保底</div>
             </div>
         </div>
         <div class="detail-price-section">
@@ -267,11 +157,10 @@ function showProductDetail(productId) {
                 <div class="detail-price">
                     <span class="price-symbol">¥</span>
                     <span class="price-value">${product.price}</span>
-                    <span class="price-unit">/小时</span>
                 </div>
                 <div class="detail-price-info">
                     <div class="detail-original-price">原价 ¥${product.originalPrice}</div>
-                    <div class="detail-discount">立省 ¥${product.originalPrice - product.price}</div>
+                    <div class="detail-discount">立省 ¥${(product.originalPrice - product.price).toFixed(2)}</div>
                 </div>
             </div>
         </div>
@@ -362,7 +251,7 @@ function openBookingModal(productId) {
                     <option value="balance">平台余额</option>
                 </select>
             </div>
-            <div style="background: var(--bg-secondary); padding: 16px; border-radius: var(--radius-md); margin-top: 16px;">
+            <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-md); margin-top: 16px;">
                 <div class="summary-row">
                     <span>服务单价：</span>
                     <span>¥${product.price}/小时</span>
@@ -457,7 +346,7 @@ function renderCart() {
     
     cartItems.innerHTML = cart.cart.map(item => `
         <div class="cart-item">
-            <div class="cart-item-image" style="background: linear-gradient(135deg, #667eea, #764ba2)"></div>
+            <div class="cart-item-image" style="background: linear-gradient(135deg, #1a1a2e, #16213e)"></div>
             <div class="cart-item-info">
                 <div>
                     <div class="cart-item-name">${item.name}</div>
@@ -501,7 +390,6 @@ function checkout() {
         return;
     }
     
-    // 显示确认弹窗
     showNotification('请前往订单页面确认支付', 'success');
     switchPage('orderPage');
 }
@@ -537,7 +425,7 @@ function renderOrders(filter = 'all') {
                     <span class="order-status ${status.class}">${status.text}</span>
                 </div>
                 <div class="order-item">
-                    <div class="order-item-image" style="background: linear-gradient(135deg, #667eea, #764ba2)"></div>
+                    <div class="order-item-image" style="background: linear-gradient(135deg, #1a1a2e, #16213e)"></div>
                     <div class="order-item-info">
                         <div class="order-item-name">${order.serviceName}</div>
                         <div class="order-item-detail">
@@ -605,7 +493,7 @@ function completeOrder(orderId) {
 
 // 订单筛选
 function filterOrder(status) {
-    document.querySelectorAll('.tab-item').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.order-tabs .tab-item').forEach(tab => tab.classList.remove('active'));
     event.target.classList.add('active');
     renderOrders(status);
 }
@@ -619,8 +507,8 @@ function switchPage(pageId) {
     const navMap = {
         'homePage': 0,
         'cartPage': 1,
-        'orderPage': 2,
-        'profilePage': 3
+        'orderPage': 3,
+        'profilePage': 4
     };
     document.querySelectorAll('.nav-item')[navMap[pageId]].classList.add('active');
     
@@ -654,11 +542,6 @@ function showNotification(message, type = '') {
     setTimeout(() => {
         notification.classList.remove('show');
     }, 3000);
-}
-
-// 显示全部分类
-function showAllCategories() {
-    showNotification('更多分类开发中...', 'warning');
 }
 
 // 显示个人资料菜单
