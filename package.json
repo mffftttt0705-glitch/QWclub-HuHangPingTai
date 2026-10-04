@@ -1,31 +1,12 @@
 {
-  "name": "qw-esports-platform",
+  "name": "monster-esports",
   "version": "1.0.0",
-  "description": "QW电竞护航平台 - Cloudflare Workers版本",
-  "main": "worker/index.js",
+  "description": "怪兽电竞前端项目 - 适配Cloudflare Pages",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "d1:init": "bash d1/init-d1.sh",
-    "d1:local": "wrangler d1 execute qw-esports-db --local --command=\"cat d1/schema.sql\"",
-    "d1:remote": "wrangler d1 execute qw-esports-db --remote --command=\"cat d1/schema.sql\"",
-    "pages:deploy": "wrangler pages deploy .",
-    "lint": "eslint .",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "cloudflare",
-    "workers",
-    "d1",
-    "gaming",
-    "esports"
-  ],
-  "author": "QW",
-  "license": "MIT",
-  "dependencies": {
-    "wrangler": "^3.0.0"
+    "deploy": "wrangler pages deploy public",
+    "dev": "serve public"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.0.0"
+    "serve": "^14.2.0"
   }
 }
