@@ -1,0 +1,57 @@
+# ============================================
+# QW电竞护航平台 - Cloudflare Workers配置
+# ============================================
+
+name = "qw-esports-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 环境变量
+[vars]
+ENVIRONMENT = "production"
+LOG_LEVEL = "info"
+
+# D1数据库绑定
+[[d1_databases]]
+binding = "DB"
+database_name = "qw-esports-db"
+database_id = "YOUR_DATABASE_ID_HERE"
+
+# R2存储桶（用于存储图片等文件）
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "qw-esports-bucket"
+
+# KV命名空间（用于缓存）
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "YOUR_KV_ID"
+
+# 队列（用于异步处理）
+# [[queues.producers]]
+# binding = "QUEUE"
+# queue = "qw-queue"
+
+# 自定义域名
+# [routes]
+# route = "api.qw-esports.com/*"
+# zone_id = "YOUR_ZONE_ID"
+
+# 日志配置
+[observability]
+enabled = true
+logging = true
+metrics = true
+
+# 安全配置
+[headers]
+"/*" = {
+  "Cache-Control" = "public, max-age=3600",
+  "Access-Control-Allow-Origin" = "*"
+}
+
+# 自定义环境变量（按需修改）
+# [env.production]
+# DATABASE_ID = "your-database-id"
+# API_URL = "https://your-worker.workers.dev"

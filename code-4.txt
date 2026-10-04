@@ -1,0 +1,12 @@
+
+## 配置环境变量
+
+在Cloudflare Dashboard中配置：
+
+- `API_URL` - Worker API地址
+- `DB_ID` - D1数据库ID
+- `DB_TOKEN` - D1数据库Token
+
+## License
+
+MIT
