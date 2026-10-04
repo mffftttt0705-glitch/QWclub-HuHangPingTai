@@ -7,24 +7,20 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="app">
         <!-- 顶部搜索栏 -->
         <header class="header">
-            <div class="header-content">
-                <div class="logo" onclick="switchPage('homePage')">
-                    <span class="logo-icon">🎮</span>
-                    <span class="logo-text">QW电竞</span>
-                </div>
+            <div class="header-top">
                 <div class="search-bar">
-                    <input type="text" id="searchInput" placeholder="搜索护航师/游戏..." oninput="searchProducts(this.value)">
-                    <button class="search-btn" onclick="searchProducts(document.getElementById('searchInput').value)">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="searchInput" placeholder="搜索你喜欢的单子" oninput="searchProducts(this.value)">
+                </div>
+                <div class="header-actions">
+                    <button class="header-btn" onclick="showNotification('客服热线：400-888-8888')">
+                        <span>🎧</span>
                     </button>
                 </div>
             </div>
@@ -34,124 +30,116 @@
         <main class="main-content">
             <!-- 首页 -->
             <div id="homePage" class="page active">
-                <!-- 轮播图 -->
-                <div class="carousel">
-                    <div class="carousel-track" id="carouselTrack">
-                        <div class="carousel-item" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                            <div class="carousel-content">
-                                <h2>新人专享</h2>
-                                <p>首单立减50元</p>
-                                <span class="tag">限时优惠</span>
+                <!-- 广告横幅 -->
+                <div class="ad-banner">
+                    <div class="ad-content">
+                        <div class="ad-text">
+                            <h2>制作同款小程序</h2>
+                            <p>承包客服管理售后包你满意</p>
+                            <div class="ad-tags">
+                                <span class="tag yellow">欢迎前来咨询</span>
+                                <span class="tag yellow">限时降价1.5w</span>
                             </div>
+                            <p class="ad-contact">搜索服务号：<strong>qw2026666</strong></p>
+                            <span class="ad-cta">或扫码关注 ▸▸▸</span>
                         </div>
-                        <div class="carousel-item" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                            <div class="carousel-content">
-                                <h2>英雄联盟</h2>
-                                <p>钻石以上护航师</p>
-                                <span class="tag">高胜率保障</span>
-                            </div>
-                        </div>
-                        <div class="carousel-item" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-                            <div class="carousel-content">
-                                <h2>王者荣耀</h2>
-                                <p>百星王者护航</p>
-                                <span class="tag">极速上分</span>
-                            </div>
-                        </div>
-                        <div class="carousel-item" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
-                            <div class="carousel-content">
-                                <h2>会员权益</h2>
-                                <p>积分兑换优惠券</p>
-                                <span class="tag">尊享特权</span>
+                        <div class="ad-qr">
+                            <div class="qr-code">
+                                <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://qw-esports.com" alt="二维码">
                             </div>
                         </div>
                     </div>
-                    <div class="carousel-dots" id="carouselDots"></div>
-                    <button class="carousel-prev" onclick="prevSlide()">‹</button>
-                    <button class="carousel-next" onclick="nextSlide()">›</button>
+                    <div class="ad-marquee">
+                        <span class="marquee-text">▶▶▶ 你能想到的功能全都有 ◀◀◀ 你能想到的功能全都有</span>
+                    </div>
                 </div>
 
-                <!-- 公告栏 -->
+                <!-- 公告通知 -->
                 <div class="notice-bar">
                     <span class="notice-icon">📢</span>
                     <div class="notice-content">
-                        <span id="noticeText">平台上新：CS:GO精英护航师入驻，限时8折优惠！</span>
+                        <span id="noticeText">报免单！如果打手有私加直接联系客服举报获得打手单全额退款！</span>
                     </div>
                 </div>
 
-                <!-- 游戏分类导航 -->
-                <div class="section-title">
-                    <span class="title-text">选择游戏</span>
-                    <span class="title-more" onclick="showAllCategories()">全部 ›</span>
-                </div>
-                <div class="game-categories">
-                    <div class="category-item" onclick="filterCategory('all')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">🎮</div>
-                        <span>全部</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('lol')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #00b0f0, #006ad4);">🛡️</div>
-                        <span>LOL</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('honor')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #ffd700, #ff8c00);">👑</div>
-                        <span>王者</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('csgo')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #ff4500, #ff6347);">🔫</div>
-                        <span>CS:GO</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('pubg')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #f5a623, #d48806);">🎯</div>
-                        <span>PUBG</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('peace')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #52c41a, #389e0d);">🎖️</div>
-                        <span>和平</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('valorant')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #ff4655, #c4303b);">⚡</div>
-                        <span>瓦罗</span>
-                    </div>
-                    <div class="category-item" onclick="filterCategory('dota2')">
-                        <div class="category-icon" style="background: linear-gradient(135deg, #c0392b, #922b21);">⚔️</div>
-                        <span>DOTA2</span>
+                <!-- 活动横幅 -->
+                <div class="campaign-banner">
+                    <div class="campaign-bg">
+                        <div class="campaign-content">
+                            <h3>特办带出价值争霸赛</h3>
+                            <p>7天内最高七次带出记录排行榜</p>
+                            <div class="campaign-awards">
+                                <div class="award-item">
+                                    <span class="award-icon">🏆</span>
+                                    <span class="award-text">老板带出奖励</span>
+                                    <span class="award-value">猛涨5W</span>
+                                </div>
+                                <div class="award-item">
+                                    <span class="award-icon">🎁</span>
+                                    <span class="award-text">大富翁专属单</span>
+                                </div>
+                                <div class="award-item">
+                                    <span class="award-icon">⭐</span>
+                                    <span class="award-text">专属勋章+奖杯</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 服务类型 -->
-                <div class="section-title">
-                    <span class="title-text">服务类型</span>
+                <!-- 功能入口卡片 -->
+                <div class="function-cards">
+                    <div class="function-card" onclick="showNotification('功能开发中')">
+                        <div class="card-icon">🎉</div>
+                        <div class="card-text">
+                            <span class="card-title">老板消费活动</span>
+                            <span class="card-desc">超多福利等着你</span>
+                        </div>
+                        <div class="card-arrow">▸</div>
+                    </div>
+                    <div class="function-card" onclick="showNotification('功能开发中')">
+                        <div class="card-icon">⚠️</div>
+                        <div class="card-text">
+                            <span class="card-title">投诉客服/打手</span>
+                            <span class="card-desc">官方投诉入口</span>
+                        </div>
+                        <div class="card-arrow">▸</div>
+                    </div>
+                    <div class="function-card" onclick="showNotification('功能开发中')">
+                        <div class="card-icon">📢</div>
+                        <div class="card-text">
+                            <span class="card-title">向董事长投诉</span>
+                            <span class="card-desc">投诉客服和打手问题</span>
+                        </div>
+                        <div class="card-arrow">▸</div>
+                    </div>
                 </div>
-                <div class="service-types">
-                    <div class="service-type" onclick="filterService('rank')">
-                        <span class="service-icon">📈</span>
-                        <span class="service-name">上分护航</span>
+
+                <!-- 分类切换 -->
+                <div class="category-tabs">
+                    <div class="tab-item active" onclick="switchCategory('all')">
+                        <span class="tab-icon">🎮</span>
+                        <span class="tab-text">大怪兽</span>
                     </div>
-                    <div class="service-type" onclick="filterService('private')">
-                        <span class="service-icon">👤</span>
-                        <span class="service-name">私人陪练</span>
-                    </div>
-                    <div class="service-type" onclick="filterService('entertainment')">
-                        <span class="service-icon">🎭</span>
-                        <span class="service-name">娱乐陪玩</span>
-                    </div>
-                    <div class="service-type" onclick="filterService('tutorial')">
-                        <span class="service-icon">📚</span>
-                        <span class="service-name">教学指导</span>
+                    <div class="tab-item" onclick="switchCategory('small')">
+                        <span class="tab-icon">🐣</span>
+                        <span class="tab-text">小怪兽</span>
                     </div>
                 </div>
 
-                <!-- 筛选栏 -->
-                <div class="filter-bar">
-                    <div class="filter-item active" onclick="sortBy('default')">综合</div>
-                    <div class="filter-item" onclick="sortBy('price')">价格</div>
-                    <div class="filter-item" onclick="sortBy('rating')">评分</div>
-                    <div class="filter-item" onclick="sortBy('sales')">销量</div>
+                <!-- 筛选标签栏 -->
+                <div class="filter-scroll">
+                    <div class="filter-item active" onclick="filterCategory('all')">全部分类</div>
+                    <div class="filter-item" onclick="filterCategory('lol')">LOL保底单</div>
+                    <div class="filter-item" onclick="filterCategory('honor')">王者专属</div>
+                    <div class="filter-item" onclick="filterCategory('csgo')">CS保底单</div>
+                    <div class="filter-item" onclick="filterCategory('tutorial')">电竞导师单</div>
+                    <div class="filter-item" onclick="filterCategory('entertainment')">趣味单</div>
+                    <div class="filter-more">≡</div>
                 </div>
 
-                <!-- 护航师列表 -->
-                <div class="product-list" id="productList"></div>
+                <!-- 商品卡片列表 -->
+                <div class="product-grid" id="productList"></div>
 
                 <!-- 加载更多 -->
                 <div class="load-more" id="loadMore">
@@ -162,7 +150,7 @@
 
             <!-- 购物车页面 -->
             <div id="cartPage" class="page">
-                <h2 class="page-title">🛒 预约单</h2>
+                <h2 class="page-title">🛒 我的预约单</h2>
                 <div id="cartItems"></div>
                 <div id="cartEmpty" class="empty-state" style="display: none;">
                     <div class="empty-icon">🛒</div>
@@ -173,10 +161,6 @@
                     <div class="summary-row">
                         <span>服务时长：</span>
                         <span id="cartTotalHours">0小时</span>
-                    </div>
-                    <div class="summary-row">
-                        <span>优惠券：</span>
-                        <span id="cartDiscount">-¥0.00</span>
                     </div>
                     <div class="summary-row total">
                         <span>合计：</span>
@@ -281,11 +265,6 @@
                         <span>支付方式</span>
                         <span class="menu-arrow">›</span>
                     </div>
-                    <div class="menu-item" onclick="showNotification('功能开发中')">
-                        <span class="menu-icon">🎫</span>
-                        <span>优惠券</span>
-                        <span class="menu-arrow">›</span>
-                    </div>
                     <div class="menu-group-title">帮助设置</div>
                     <div class="menu-item" onclick="showNotification('功能开发中')">
                         <span class="menu-icon">❓</span>
@@ -320,10 +299,10 @@
                         <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
                     </svg>
                 </span>
-                <span class="nav-text">购物车</span>
+                <span class="nav-text">分类</span>
                 <span class="badge" id="cartBadge" style="display: none;">0</span>
             </div>
-            <div class="nav-item" onclick="switchPage('orderPage')">
+            <div class="nav-item" onclick="showNotification('打手功能开发中')">
                 <span class="nav-icon">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -332,7 +311,16 @@
                         <line x1="16" y1="17" x2="8" y2="17"></line>
                     </svg>
                 </span>
-                <span class="nav-text">订单</span>
+                <span class="nav-text">打手</span>
+            </div>
+            <div class="nav-item" onclick="switchPage('orderPage')">
+                <span class="nav-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                </span>
+                <span class="nav-text">消息</span>
             </div>
             <div class="nav-item" onclick="switchPage('profilePage')">
                 <span class="nav-icon">
