@@ -1,1 +1,0 @@
-import{o as e,t as a,g as s,s as n,r,c as t,a as i,i as p}from"./index-0svQfUwy.js";const u={__name:"init",setup:u=>(e((()=>{a.isEmpty(s("type"))?(n("type","用户"),r.reLaunch({url:"pages/index/index"})):"用户"==s("type")?r.reLaunch({url:"pages/index/index"}):r.reLaunch({url:"pages/playerMain/index"})})),(e,a)=>{const s=p;return i(),t(s)})};export{u as default};
