@@ -9,11 +9,11 @@ body {
     background-color: #f5f5f5;
     color: #333;
     line-height: 1.5;
+    max-width: 480px;
+    margin: 0 auto;
 }
 
 .app-container {
-    max-width: 480px;
-    margin: 0 auto;
     background-color: #fff;
     min-height: 100vh;
     position: relative;
@@ -44,7 +44,7 @@ body {
 
 .search-icon {
     margin-right: 8px;
-    color: #999;
+    font-size: 16px;
 }
 
 .search-input {
@@ -52,6 +52,7 @@ body {
     outline: none;
     flex: 1;
     font-size: 14px;
+    background: transparent;
 }
 
 .header-icons {
@@ -101,6 +102,7 @@ body {
     display: flex;
     gap: 10px;
     margin-bottom: 10px;
+    flex-wrap: wrap;
 }
 
 .tag {
@@ -181,15 +183,15 @@ body {
     padding: 15px 10px;
     text-align: center;
     transition: transform 0.3s;
+    cursor: pointer;
 }
 
 .entry-btn:active {
     transform: scale(0.95);
 }
 
-.entry-icon img {
-    width: 40px;
-    height: 40px;
+.entry-icon {
+    font-size: 32px;
     margin-bottom: 8px;
 }
 
@@ -221,12 +223,11 @@ body {
     background-color: #fff5e6;
 }
 
-.monster-option img {
-    width: 30px;
-    height: 30px;
+.monster-emoji {
+    font-size: 24px;
 }
 
-.monster-option span {
+.monster-option span:last-child {
     font-size: 14px;
     font-weight: bold;
 }
@@ -238,6 +239,7 @@ body {
     margin-bottom: 15px;
     overflow-x: auto;
     padding-bottom: 5px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .category-tabs::-webkit-scrollbar {
@@ -297,6 +299,7 @@ body {
     width: 100%;
     height: 150px;
     object-fit: cover;
+    display: block;
 }
 
 .product-badge {
@@ -337,6 +340,7 @@ body {
     display: flex;
     align-items: baseline;
     gap: 5px;
+    flex-wrap: wrap;
 }
 
 .price {
@@ -371,6 +375,7 @@ body {
     justify-content: space-around;
     padding: 10px 0;
     box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    z-index: 100;
 }
 
 .nav-item {
@@ -424,6 +429,9 @@ body {
     font-size: 18px;
     font-weight: bold;
     margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .user-level {
@@ -435,7 +443,7 @@ body {
     border-radius: 15px;
     font-size: 12px;
     color: #ff6b35;
-    margin-left: 10px;
+    font-weight: normal;
 }
 
 .user-id {
@@ -554,6 +562,7 @@ body {
     color: #fff;
     border-radius: 10px;
     padding: 15px;
+    cursor: pointer;
 }
 
 .balance-label {
@@ -685,6 +694,7 @@ body {
     border-radius: 10px;
     margin-bottom: 10px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    cursor: pointer;
 }
 
 .message-avatar {
@@ -752,12 +762,14 @@ body {
     border-radius: 10px;
     overflow: hidden;
     box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    cursor: pointer;
 }
 
 .hitman-image {
     width: 100%;
     height: 120px;
     object-fit: cover;
+    display: block;
 }
 
 .hitman-name {
@@ -780,10 +792,6 @@ body {
 
 .hitman-stats.pink {
     background-color: #ff6b9d;
-}
-
-.hitman-stats.green {
-    background-color: #2ecc71;
 }
 
 /* 分类页面样式 */
@@ -812,11 +820,14 @@ body {
     cursor: pointer;
     font-size: 14px;
     transition: all 0.3s;
+    background-color: #fff;
+    border: 1px solid #e0e0e0;
 }
 
 .tab-flat.active {
     background-color: #333;
     color: #fff;
+    border-color: #333;
 }
 
 .category-list {
@@ -875,6 +886,7 @@ body {
 .progress-text {
     font-size: 12px;
     color: #666;
+    white-space: nowrap;
 }
 
 .category-item-actions {
@@ -902,22 +914,29 @@ body {
     cursor: pointer;
 }
 
-/* 响应式调整 */
-@media (max-width: 360px) {
-    .entry-buttons {
-        grid-template-columns: repeat(2, 1fr);
+/* Toast 提示 */
+.toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 1000;
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        top: -50px;
+        opacity: 0;
     }
-    
-    .product-list {
-        grid-template-columns: 1fr;
-    }
-    
-    .orders-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-    
-    .functions-grid {
-        grid-template-columns: repeat(3, 1fr);
+    to {
+        top: 20px;
+        opacity: 1;
     }
 }
 
