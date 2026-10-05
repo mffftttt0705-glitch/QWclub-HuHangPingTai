@@ -4,4 +4,4 @@ pages_build_output_dir = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "booster-db"
-database_id = "YOUR_D1_DATABASE_ID" # 后续在 Cloudflare 创建 D1 后替换此 ID
+database_id = "你的_D1_DATABASE_ID"  # 在 Cloudflare D1 创建后将 ID 填入此处
