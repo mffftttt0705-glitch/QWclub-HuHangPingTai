@@ -1,150 +1,158 @@
-// 1. 6位 ID 混淆算法
-function generate6DigitID(orderPrimaryId) {
-  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-  let hash = (orderPrimaryId * 9301 + 49297) % 233280;
-  let result = '';
-  for (let i = 0; i < 6; i++) {
-    const randomIndex = Math.floor((hash + i * 17 + Math.random() * 32) % chars.length);
-    result += chars[randomIndex];
-  }
-  return result;
-}
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors');
+const app = express();
 
-// 2. 统一 JSON 响应辅助函数
-function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 
-      'Content-Type': 'application/json;charset=UTF-8',
-      'Access-Control-Allow-Origin': '*'
-    }
-  });
-}
+app.use(cors());
+app.use(express.json());
 
-// 3. Cloudflare Pages Functions 标准入口
-export async function onRequest(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const path = url.pathname;
-  const method = request.method;
-  const db = env.DB; // 绑定 Cloudflare D1 数据库
+const db = new sqlite3.Database('./qw_esports.db');
 
-  // 处理 CORS 预检请求
-  if (method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
+// ================= 1. 用户认证与基础逻辑 =================
+
+// 用户注册 (初始可用余额严格为 0)
+app.post('/api/register', (req, res) => {
+    const { username, password, role } = req.body;
+    const userCode = (role === 'admin' ? 'ADM' : role === 'employer' ? 'EMP' : 'BST') + Math.floor(100000 + Math.random() * 900000);
+    
+    // 假设简易密码处理，建议使用 bcrypt.hashSync(password, 10)
+    const sql = `INSERT INTO users (user_code, username, password_hash, role, balance, frozen_deposit) VALUES (?, ?, ?, ?, 0.00, 0.00)`;
+    db.run(sql, [userCode, username, password, role], function(err) {
+        if (err) return res.status(400).json({ error: '用户名已存在或注册失败' });
+        res.json({ success: true, userId: this.lastID, userCode, username, role, balance: 0.00 });
     });
-  }
+});
 
-  try {
-    // 获取用户列表: GET /api/users
-    if (path === '/api/users' && method === 'GET') {
-      const { results } = await db.prepare("SELECT * FROM users").all();
-      return jsonResponse({ success: true, data: results });
-    }
+// 获取用户最新资产与信息
+app.get('/api/user/:id', (req, res) => {
+    db.get(`SELECT id, user_code, username, role, balance, frozen_deposit FROM users WHERE id = ?`, [req.params.id], (err, user) => {
+        if (err || !user) return res.status(404).json({ error: '用户不存在' });
+        res.json(user);
+    });
+});
 
-    // 获取订单大厅: GET /api/orders
-    if (path === '/api/orders' && method === 'GET') {
-      const status = url.searchParams.get('status');
-      let sql = `
-        SELECT o.*, e.username as employer_name, b.username as booster_name 
-        FROM orders o
-        LEFT JOIN users e ON o.employer_id = e.id
-        LEFT JOIN users b ON o.booster_id = b.id
-      `;
-      let stmt;
-      if (status !== null && status !== '') {
-        sql += " WHERE o.status = ? ORDER BY o.created_at DESC";
-        stmt = db.prepare(sql).bind(parseInt(status));
-      } else {
-        sql += " ORDER BY o.created_at DESC";
-        stmt = db.prepare(sql);
-      }
-      const { results } = await stmt.all();
-      return jsonResponse({ success: true, data: results });
-    }
+// ================= 2. 核心代练订单业务流 =================
 
-    // 发布代练订单: POST /api/orders/create
-    if (path === '/api/orders/create' && method === 'POST') {
-      const body = await request.json();
-      const { employerId, title, gameName, gameRegion, accountInfo, bounty, deposit } = body;
+// 发布订单 (扣除派单员托管赏金)
+app.post('/api/orders/create', (req, res) => {
+    const { employerId, title, gameName, gameRegion, timeLimit, description, bounty, deposit } = req.body;
 
-      const employer = await db.prepare("SELECT * FROM users WHERE id = ?").bind(employerId).first();
-      if (!employer || employer.red_diamonds < bounty) {
-        return jsonResponse({ success: false, message: "红钻余额不足，无法发布订单" }, 400);
-      }
+    db.get(`SELECT balance FROM users WHERE id = ?`, [employerId], (err, user) => {
+        if (!user || user.balance < bounty) {
+            return res.status(400).json({ error: '账户余额不足以托管赏金，请联系管理员充值' });
+        }
 
-      // 插入订单记录
-      const insertRes = await db.prepare(
-        "INSERT INTO orders (display_id, title, game_name, game_region, account_info, bounty, deposit, status, employer_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)"
-      ).bind('TEMP', title, gameName, gameRegion || '', accountInfo || '', bounty, deposit, employerId).run();
+        db.serialize(() => {
+            // 扣除发单者余额
+            db.run(`UPDATE users SET balance = balance - ? WHERE id = ?`, [bounty, employerId]);
+            
+            // 写入订单
+            const displayId = 'QW' + Math.floor(100000 + Math.random() * 900000);
+            const sql = `INSERT INTO orders (display_id, employer_id, title, game_name, game_region, time_limit, description, bounty, deposit, status)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`;
+            db.run(sql, [displayId, employerId, title, gameName, gameRegion, timeLimit, description, bounty, deposit], function(err) {
+                if (err) return res.status(500).json({ error: '发布订单失败' });
+                res.json({ success: true, orderId: this.lastID, displayId });
+            });
+        });
+    });
+});
 
-      const primaryId = insertRes.meta.last_row_id;
-      const displayId = generate6DigitID(primaryId);
+// 打手接单 (扣除保证金并冻结)
+app.post('/api/orders/accept', (req, res) => {
+    const { orderId, boosterId } = req.body;
 
-      // 执行扣款与更新单号事务
-      await db.batch([
-        db.prepare("UPDATE users SET red_diamonds = red_diamonds - ? WHERE id = ?").bind(bounty, employerId),
-        db.prepare("UPDATE orders SET display_id = ? WHERE id = ?").bind(displayId, primaryId)
-      ]);
+    db.get(`SELECT * FROM orders WHERE id = ? AND status = 0`, [orderId], (err, order) => {
+        if (!order) return res.status(400).json({ error: '订单不存在或已被抢单' });
 
-      return jsonResponse({ success: true, data: { displayId } });
-    }
+        db.get(`SELECT balance FROM users WHERE id = ?`, [boosterId], (err, booster) => {
+            if (!booster || booster.balance < order.deposit) {
+                return res.status(400).json({ error: '保证金不足，接单失败' });
+            }
 
-    // 打手抢单: POST /api/orders/accept
-    if (path === '/api/orders/accept' && method === 'POST') {
-      const { orderId, boosterId } = await request.json();
-      const order = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(orderId).first();
-      const booster = await db.prepare("SELECT * FROM users WHERE id = ?").bind(boosterId).first();
+            db.serialize(() => {
+                // 扣除余额并增加冻结保证金
+                db.run(`UPDATE users SET balance = balance - ?, frozen_deposit = frozen_deposit + ? WHERE id = ?`, [order.deposit, order.deposit, boosterId]);
+                // 更新订单状态为代练中 (status=1)
+                db.run(`UPDATE orders SET booster_id = ?, status = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [boosterId, orderId]);
+                res.json({ success: true, message: '抢单成功！保证金已冻结' });
+            });
+        });
+    });
+});
 
-      if (!order || order.status !== 0) {
-        return jsonResponse({ success: false, message: "订单不存在或已经被抢接" }, 400);
-      }
-      if (!booster || booster.red_diamonds < order.deposit) {
-        return jsonResponse({ success: false, message: "红钻余额不足以缴纳保证金" }, 400);
-      }
+// 打手提交完工服务
+app.post('/api/orders/complete', (req, res) => {
+    const { orderId, proofImg } = req.body;
+    db.run(`UPDATE orders SET proof_img = ?, status = 2, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 1`, [proofImg, orderId], function(err) {
+        if (this.changes === 0) return res.status(400).json({ error: '提交失败，订单状态不符' });
+        res.json({ success: true, message: '已提交完工凭证，等待验收' });
+    });
+});
 
-      // 扣除红钻并冻结保证金
-      await db.batch([
-        db.prepare("UPDATE users SET red_diamonds = red_diamonds - ?, frozen_diamonds = frozen_diamonds + ? WHERE id = ?").bind(order.deposit, order.deposit, boosterId),
-        db.prepare("UPDATE orders SET status = 1, booster_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(boosterId, orderId)
-      ]);
+// 派单员确认验收
+app.post('/api/orders/confirm', (req, res) => {
+    const { orderId, employerId } = req.body;
+    db.run(`UPDATE orders SET status = 3, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND employer_id = ? AND status = 2`, [orderId, employerId], function(err) {
+        if (this.changes === 0) return res.status(400).json({ error: '确认失败' });
+        res.json({ success: true, message: '已验收确认，等待管理员打款结算' });
+    });
+});
 
-      return jsonResponse({ success: true, message: "抢单成功！保证金已冻结" });
-    }
+// 管理员最终结算资金 (解冻退保证金 + 发放赏金)
+app.post('/api/orders/admin-settle', (req, res) => {
+    const { orderId, adminId } = req.body;
 
-    // 提交完工: POST /api/orders/complete
-    if (path === '/api/orders/complete' && method === 'POST') {
-      const { orderId, boosterId, proofImg } = await request.json();
-      await db.prepare("UPDATE orders SET status = 2, proof_img = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND booster_id = ?")
-        .bind(proofImg || '完工截图凭证', orderId, boosterId).run();
-      return jsonResponse({ success: true, message: "已提交完工，等待验收" });
-    }
+    // 验证管理员身份
+    db.get(`SELECT role FROM users WHERE id = ?`, [adminId], (err, admin) => {
+        if (!admin || admin.role !== 'admin') return res.status(403).json({ error: '无权限操作' });
 
-    // 确认结算: POST /api/orders/confirm
-    if (path === '/api/orders/confirm' && method === 'POST') {
-      const { orderId, employerId } = await request.json();
-      const order = await db.prepare("SELECT * FROM orders WHERE id = ? AND employer_id = ?").bind(orderId, employerId).first();
+        db.get(`SELECT * FROM orders WHERE id = ? AND status = 3`, [orderId], (err, order) => {
+            if (!order) return res.status(400).json({ error: '订单不处于待结算状态' });
 
-      if (!order || order.status !== 2) {
-        return jsonResponse({ success: false, message: "订单未处于待验收状态" }, 400);
-      }
+            db.serialize(() => {
+                // 退还保证金并加上赏金给打手
+                db.run(`UPDATE users SET frozen_deposit = frozen_deposit - ?, balance = balance + ? + ? WHERE id = ?`, 
+                       [order.deposit, order.deposit, order.bounty, order.booster_id]);
+                // 更新订单状态为已完成结算 (status=4)
+                db.run(`UPDATE orders SET status = 4, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [orderId]);
+                res.json({ success: true, message: '管理员结算成功！资金已打入打手账户' });
+            });
+        });
+    });
+});
 
-      // 解冻押金并划转赏金
-      await db.batch([
-        db.prepare("UPDATE users SET frozen_diamonds = frozen_diamonds - ?, red_diamonds = red_diamonds + ? + ? WHERE id = ?").bind(order.deposit, order.deposit, order.bounty, order.booster_id),
-        db.prepare("UPDATE orders SET status = 3, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(orderId)
-      ]);
+// ================= 3. 管理员控制台与账户调账 API =================
 
-      return jsonResponse({ success: true, message: "确认结算成功！赏金与保证金已打入打手账户" });
-    }
+// 获取所有用户列表 (管理员专享)
+app.get('/api/admin/users', (req, res) => {
+    db.all(`SELECT id, user_code, username, role, balance, frozen_deposit, created_at FROM users`, [], (err, rows) => {
+        res.json(rows || []);
+    });
+});
 
-    return jsonResponse({ success: false, message: "接口未找到" }, 404);
-  } catch (err) {
-    return jsonResponse({ success: false, error: err.message }, 500);
-  }
-}
+// 管理员增减用户余额 (加钱/扣钱)
+app.post('/api/admin/adjust-balance', (req, res) => {
+    const { adminId, targetUserId, amount, type } = req.body; // type: 'add' 或 'reduce'
+
+    db.get(`SELECT role FROM users WHERE id = ?`, [adminId], (err, admin) => {
+        if (!admin || admin.role !== 'admin') return res.status(403).json({ error: '仅管理员可进行人工调账' });
+
+        const adjustAmount = type === 'add' ? Math.abs(amount) : -Math.abs(amount);
+        db.run(`UPDATE users SET balance = balance + ? WHERE id = ?`, [adjustAmount, targetUserId], function(err) {
+            if (err) return res.status(500).json({ error: '调账失败' });
+            res.json({ success: true, message: `余额调整成功！` });
+        });
+    });
+});
+
+// 管理员编辑或删除任意订单
+app.delete('/api/admin/order/:id', (req, res) => {
+    db.run(`DELETE FROM orders WHERE id = ?`, [req.params.id], function(err) {
+        res.json({ success: true, message: '订单已删除' });
+    });
+});
+
+app.listen(3000, () => {
+    console.log('QW电竞外派后端服务已成功启动，监听端口 3000');
+});
