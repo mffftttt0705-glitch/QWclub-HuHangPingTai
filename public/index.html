@@ -2,111 +2,352 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>QW电竞代练外派交易平台</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>代练通 - 专业代练交易平台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <!-- 引入 Lucide 图标库 -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* 隐藏滚动条但允许滚动 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    body { -webkit-tap-highlight-color: transparent; }
+  </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
-  <div id="app" class="p-4 max-w-7xl mx-auto">
-    <header class="flex flex-col sm:flex-row justify-between items-center bg-slate-800 p-4 rounded-xl mb-6 border border-slate-700 gap-4">
-      <div class="text-xl font-bold text-amber-400">⚡ QW电竞代练外派交易平台 (Cloudflare 版)</div>
-      <div class="flex items-center space-x-4">
-        <div class="flex items-center space-x-2">
-          <span class="text-xs text-slate-400">切换身份:</span>
-          <select v-model="currentUserId" @change="fetchUserData" class="bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white focus:outline-none">
-            <option v-for="u in users" :key="u.id" :value="u.id">
-              {{ u.username }} ({{ u.role === 'employer' ? '老板' : '打手' }}) - Code: {{ u.user_code }}
-            </option>
-          </select>
+<body class="bg-slate-900 text-slate-100 min-h-screen pb-20 select-none">
+  <div id="app" class="max-w-md mx-auto relative min-h-screen bg-slate-900 shadow-2xl">
+    
+    <!-- ================= 1. 发单页面 (Tab 0) ================= -->
+    <div v-show="activeTab === 'publish'" class="p-4 space-y-4">
+      <!-- 顶部 Header -->
+      <div class="flex justify-between items-center pt-2 pb-1">
+        <div>
+          <h1 class="text-2xl font-black bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">代练通</h1>
+          <p class="text-[10px] text-slate-400">昨日累计服务 30,456 人</p>
         </div>
-        <div v-if="currentUser" class="bg-slate-900 px-3 py-1.5 rounded-lg text-sm border border-slate-700">
-          <span>余额: <strong class="text-amber-400">{{ currentUser.red_diamonds }}</strong> 💎</span>
-          <span v-if="currentUser.role === 'booster'" class="ml-2 text-slate-400">| 冻结: <strong class="text-orange-400">{{ currentUser.frozen_diamonds }}</strong> 💎</span>
-        </div>
-      </div>
-    </header>
-
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-      <div v-if="currentUser && currentUser.role === 'employer'" class="bg-slate-800 p-5 rounded-xl border border-slate-700 h-fit">
-        <h2 class="text-lg font-bold mb-4 text-amber-400 border-b border-slate-700 pb-2">发布新代练需求</h2>
-        <form @submit.prevent="createOrder" class="space-y-3">
-          <div>
-            <label class="text-xs text-slate-400">订单标题</label>
-            <input v-model="form.title" placeholder="例如: 王者50星升70星" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
-          </div>
-          <div>
-            <label class="text-xs text-slate-400">游戏名称</label>
-            <input v-model="form.gameName" placeholder="例如: 王者荣耀" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
-          </div>
-          <div>
-            <label class="text-xs text-slate-400">游戏区服</label>
-            <input v-model="form.gameRegion" placeholder="例如: 微信大区 / 黑色玫瑰" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none">
-          </div>
-          <div>
-            <label class="text-xs text-slate-400">托管赏金 (红钻)</label>
-            <input v-model.number="form.bounty" type="number" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
-          </div>
-          <div>
-            <label class="text-xs text-slate-400">要求保证金 (红钻)</label>
-            <input v-model.number="form.deposit" type="number" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
-          </div>
-          <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-2.5 rounded-lg transition mt-2">发布订单</button>
-        </form>
+        <button @click="showModal = true" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs px-3.5 py-1.5 rounded-full shadow-lg shadow-amber-500/20 transition">
+          + 发布自定义需求
+        </button>
       </div>
 
-      <div :class="currentUser && currentUser.role === 'employer' ? 'lg:col-span-3' : 'lg:col-span-4'">
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-800 p-3 rounded-xl border border-slate-700 gap-3">
-          <div class="flex space-x-2">
-            <button v-for="s in statusOptions" :key="s.value" @click="setStatus(s.value)" :class="['px-3 py-1.5 rounded-lg text-xs font-bold transition', activeStatus === s.value ? 'bg-amber-500 text-slate-950' : 'bg-slate-700 text-slate-300 hover:bg-slate-600']">
-              {{ s.label }}
-            </button>
+      <!-- 快捷托管发单 Banner 区域 -->
+      <div class="bg-gradient-to-r from-indigo-900/60 via-purple-900/40 to-slate-800 p-4 rounded-2xl border border-indigo-500/30 backdrop-blur">
+        <div class="flex justify-between items-center mb-3">
+          <div>
+            <h3 class="font-extrabold text-sm text-indigo-200">托管发单 · 平台帮上分</h3>
+            <p class="text-[11px] text-indigo-400/80">全程资金保障 免沟通极速接单</p>
           </div>
-          <button @click="fetchOrders" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-slate-600">🔄 刷新大厅</button>
+          <span class="text-xs text-amber-400 font-bold flex items-center">更多游戏 &gt;</span>
         </div>
+        <!-- 游戏入口方块 -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <div @click="quickPublish('王者荣耀')" class="bg-gradient-to-br from-indigo-600/50 to-blue-700/40 p-3 rounded-xl border border-indigo-400/30 flex flex-col justify-between h-24 cursor-pointer hover:scale-[1.02] transition">
+            <span class="font-black text-sm text-white">王者荣耀</span>
+            <span class="bg-white/20 text-[10px] text-white px-2 py-0.5 rounded-full w-fit backdrop-blur">立即下单</span>
+          </div>
+          <div class="grid grid-rows-2 gap-2">
+            <div @click="quickPublish('三角洲行动')" class="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center cursor-pointer">
+              <span class="text-xs font-bold text-slate-200">三角洲行动</span>
+              <span class="text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">热门</span>
+            </div>
+            <div @click="quickPublish('英雄联盟')" class="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center cursor-pointer">
+              <span class="text-xs font-bold text-slate-200">英雄联盟</span>
+              <span class="text-[10px] text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded">端游</span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div v-for="order in orders" :key="order.id" class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-between hover:border-slate-600 transition">
-            <div>
-              <div class="flex justify-between items-center text-xs text-slate-400 mb-2">
-                <span>单号: <strong class="text-amber-400 font-mono">{{ order.display_id }}</strong></span>
-                <span :class="['px-2 py-0.5 rounded font-bold', statusColor(order.status)]">{{ statusText(order.status) }}</span>
+      <!-- 特价秒杀列表 -->
+      <div>
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="font-extrabold text-base text-amber-400 flex items-center gap-1.5">
+            <span>🔥</span> 特价秒杀套餐
+          </h3>
+          <div class="flex gap-2 text-xs text-slate-400">
+            <span class="text-amber-400 font-bold border-b-2 border-amber-400 pb-0.5">王者荣耀</span>
+            <span>三角洲</span>
+            <span>英雄联盟</span>
+          </div>
+        </div>
+        <div class="space-y-2.5">
+          <div v-for="pkg in presetPackages" :key="pkg.id" class="bg-slate-800/90 p-3 rounded-xl border border-slate-700/80 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center font-black text-amber-400 text-xs">
+                S5v5
               </div>
-              <h3 class="font-bold text-base mb-1 text-white">{{ order.title }}</h3>
-              <p class="text-xs text-slate-400 mb-3">游戏: {{ order.game_name }} {{ order.game_region ? '| ' + order.game_region : '' }}</p>
-              
-              <div class="grid grid-cols-2 gap-2 bg-slate-900 p-2.5 rounded-lg mb-3 text-center">
-                <div>
-                  <div class="text-[10px] text-slate-500">托管赏金</div>
-                  <div class="text-amber-400 font-bold text-sm">+{{ order.bounty }} 💎</div>
-                </div>
-                <div>
-                  <div class="text-[10px] text-slate-500">冻结保证金</div>
-                  <div class="text-orange-400 font-bold text-sm">-{{ order.deposit }} 💎</div>
-                </div>
-              </div>
-
-              <div class="text-xs text-slate-400 space-y-1 mb-3">
-                <div>发单老板: <span class="text-slate-200">{{ order.employer_name }}</span></div>
-                <div v-if="order.booster_name">接单打手: <span class="text-slate-200">{{ order.booster_name }}</span></div>
+              <div>
+                <h4 class="font-bold text-xs text-white">{{ pkg.title }}</h4>
+                <p class="text-[10px] text-slate-400 mt-0.5">{{ pkg.desc }}</p>
               </div>
             </div>
-
-            <div class="pt-2 border-t border-slate-700">
-              <button v-if="order.status === 0 && currentUser && currentUser.role === 'booster'" @click="acceptOrder(order.id)" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded-lg text-sm transition">
-                ⚡ 立即抢单 (冻结 {{ order.deposit }} 💎 押金)
-              </button>
-              <button v-if="order.status === 1 && currentUser && currentUser.id === order.booster_id" @click="completeOrder(order.id)" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 rounded-lg text-sm transition">
-                提交完工凭证
-              </button>
-              <button v-if="order.status === 2 && currentUser && currentUser.id === order.employer_id" @click="confirmOrder(order.id)" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2 rounded-lg text-sm transition">
-                确认完工并结算
+            <div class="text-right">
+              <div class="text-amber-400 font-black text-sm">¥ {{ pkg.price }} <span class="text-[10px] text-slate-500 line-through">¥{{ pkg.originPrice }}</span></div>
+              <button @click="publishPresetPackage(pkg)" class="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 text-[11px] font-black px-3 py-1 rounded-full mt-1">
+                立即抢购
               </button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- ================= 2. 接单大厅页面 (Tab 1) ================= -->
+    <div v-show="activeTab === 'hall'" class="p-4 space-y-3">
+      <!-- 搜索与快捷入口 -->
+      <div class="flex gap-2 items-center">
+        <div class="flex-1 bg-slate-800 border border-slate-700 rounded-full px-3 py-1.5 flex items-center gap-2 text-xs text-slate-400">
+          <span>🔍</span>
+          <input type="text" placeholder="搜索段位 / 游戏 / 关键词" class="bg-transparent border-none outline-none w-full text-white placeholder-slate-500">
+        </div>
+        <button @click="fetchOrders" class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-full text-xs text-amber-400 font-bold">刷新</button>
+      </div>
+
+      <!-- 功能金刚区快捷块 -->
+      <div class="grid grid-cols-3 gap-2 text-center text-xs">
+        <div class="bg-gradient-to-br from-indigo-900/50 to-slate-800 p-2.5 rounded-xl border border-indigo-500/20">
+          <div class="font-extrabold text-indigo-300 text-xs">🚀 0秒抢单</div>
+          <div class="text-[9px] text-indigo-400/70 mt-0.5">高额悬赏肥单</div>
+        </div>
+        <div class="bg-gradient-to-br from-purple-900/50 to-slate-800 p-2.5 rounded-xl border border-purple-500/20">
+          <div class="font-extrabold text-purple-300 text-xs">👥 组队大厅</div>
+          <div class="text-[9px] text-purple-400/70 mt-0.5">大神带飞双排</div>
+        </div>
+        <div class="bg-gradient-to-br from-amber-900/40 to-slate-800 p-2.5 rounded-xl border border-amber-500/20">
+          <div class="font-extrabold text-amber-300 text-xs">💬 专属接单群</div>
+          <div class="text-[9px] text-amber-400/70 mt-0.5">享无门槛接单</div>
+        </div>
+      </div>
+
+      <!-- 筛选 Filter Tabs -->
+      <div class="flex justify-between items-center bg-slate-800/60 p-1.5 rounded-xl border border-slate-800 text-xs">
+        <button v-for="s in statusOptions" :key="s.value" @click="setStatusFilter(s.value)"
+          :class="['flex-1 py-1 rounded-lg font-bold transition-all text-center', filterStatus === s.value ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400']">
+          {{ s.label }}
+        </button>
+      </div>
+
+      <!-- 订单列表 -->
+      <div class="space-y-3">
+        <div v-for="order in orders" :key="order.id" class="bg-slate-800/90 p-3.5 rounded-2xl border border-slate-700/80 space-y-2.5">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="bg-blue-500/20 text-blue-400 text-[10px] font-extrabold px-2 py-0.5 rounded mr-1.5">公共</span>
+              <span class="text-xs text-slate-400 font-mono">单号: {{ order.display_id }}</span>
+            </div>
+            <span :class="['text-[10px] font-black px-2 py-0.5 rounded-full', statusBadgeColor(order.status)]">
+              {{ statusText(order.status) }}
+            </span>
+          </div>
+          
+          <h4 class="font-bold text-sm text-slate-100 leading-snug">{{ order.title }}</h4>
+          
+          <div class="text-[11px] text-slate-400 flex flex-wrap gap-2">
+            <span class="bg-slate-900 px-2 py-0.5 rounded text-slate-300">{{ order.game_name }}</span>
+            <span v-if="order.game_region" class="bg-slate-900 px-2 py-0.5 rounded text-slate-300">{{ order.game_region }}</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 bg-slate-900/80 p-2 rounded-xl text-center">
+            <div>
+              <div class="text-[9px] text-slate-500">代练赏金</div>
+              <div class="text-amber-400 font-black text-sm">¥ {{ order.bounty }}</div>
+            </div>
+            <div>
+              <div class="text-[9px] text-slate-500">冻结保证金</div>
+              <div class="text-orange-400 font-black text-sm">¥ {{ order.deposit }}</div>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center pt-1 text-[11px]">
+            <span class="text-slate-400">老板: <strong class="text-slate-200">{{ order.employer_name }}</strong></span>
+            <span v-if="order.booster_name" class="text-slate-400">打手: <strong class="text-slate-200">{{ order.booster_name }}</strong></span>
+          </div>
+
+          <!-- 动态按钮控制 -->
+          <div class="pt-1">
+            <button v-if="order.status === 0 && currentUser && currentUser.role === 'booster'" @click="acceptOrder(order.id)" 
+              class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black py-2 rounded-xl text-xs transition shadow-lg shadow-emerald-500/10">
+              ⚡ 立即抢单 (冻结押金 ¥{{ order.deposit }})
+            </button>
+            <button v-if="order.status === 1 && currentUser && currentUser.id === order.booster_id" @click="completeOrder(order.id)" 
+              class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-black py-2 rounded-xl text-xs transition">
+              上传凭证提交完工
+            </button>
+            <button v-if="order.status === 2 && currentUser && currentUser.id === order.employer_id" @click="confirmOrder(order.id)" 
+              class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-2 rounded-xl text-xs transition">
+              确认无误并结算赏金
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 3. 消息中心页面 (Tab 2) ================= -->
+    <div v-show="activeTab === 'msg'" class="p-4 space-y-4">
+      <div class="flex justify-between items-center pt-2">
+        <h2 class="text-xl font-black text-white">消息中心</h2>
+        <span class="text-xs text-amber-400 cursor-pointer">清除未读</span>
+      </div>
+
+      <!-- 消息分类小金刚图标 -->
+      <div class="grid grid-cols-5 gap-1 text-center">
+        <div class="flex flex-col items-center gap-1">
+          <div class="w-11 h-11 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center text-lg">📦</div>
+          <span class="text-[10px] text-slate-300">订单状态</span>
+        </div>
+        <div class="flex flex-col items-center gap-1 relative">
+          <div class="w-11 h-11 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center text-lg">📢</div>
+          <span class="absolute top-0 right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+          <span class="text-[10px] text-slate-300">系统消息</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <div class="w-11 h-11 bg-pink-500/20 text-pink-400 rounded-2xl flex items-center justify-center text-lg">📋</div>
+          <span class="text-[10px] text-slate-300">公告消息</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <div class="w-11 h-11 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center text-lg">🎁</div>
+          <span class="text-[10px] text-slate-300">活动中心</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+          <div class="w-11 h-11 bg-purple-500/20 text-purple-400 rounded-2xl flex items-center justify-center text-lg">💬</div>
+          <span class="text-[10px] text-slate-300">互动</span>
+        </div>
+      </div>
+
+      <!-- 消息列表 -->
+      <div class="space-y-2.5 pt-2">
+        <div class="bg-slate-800/80 p-3 rounded-2xl border border-slate-700/60 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 font-bold text-sm">统</div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center">
+              <h4 class="font-bold text-xs text-white">代练通官方安全助手</h4>
+              <span class="text-[9px] text-slate-500">15:37</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5 line-clamp-1">接单请注意核对账号信息，严禁私下交易保护资金安全。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 4. 我的 / 身份切换页面 (Tab 3) ================= -->
+    <div v-show="activeTab === 'mine'" class="p-4 space-y-4">
+      <!-- 个人信息卡片 -->
+      <div class="bg-gradient-to-br from-slate-800 to-slate-800/60 p-4 rounded-2xl border border-slate-700/80">
+        <div class="flex justify-between items-center mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-400 to-orange-500 flex items-center justify-center font-black text-slate-950 text-base">
+              {{ currentUser ? currentUser.username.substring(0, 1) : '用' }}
+            </div>
+            <div>
+              <h3 class="font-black text-sm text-white flex items-center gap-1.5">
+                {{ currentUser ? currentUser.username : '未登录' }}
+                <span class="bg-amber-400/20 text-amber-400 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                  {{ currentUser && currentUser.role === 'employer' ? '雇主/老板' : '打手/接单员' }}
+                </span>
+              </h3>
+              <p class="text-[10px] text-slate-400 font-mono mt-0.5">用户代码: {{ currentUser ? currentUser.user_code : '--' }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 模拟身份快速切换下拉菜单 -->
+        <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs">
+          <span class="text-slate-400">切换测试身份:</span>
+          <select v-model="currentUserId" @change="fetchUserData" class="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-amber-400 font-bold outline-none">
+            <option v-for="u in users" :key="u.id" :value="u.id">
+              {{ u.username }} ({{ u.role === 'employer' ? '老板' : '打手' }})
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 我的资产面板 -->
+      <div class="bg-slate-800/90 p-4 rounded-2xl border border-slate-700/80">
+        <div class="flex justify-between items-center mb-3">
+          <span class="font-extrabold text-xs text-slate-300">我的资产 (红钻/现金)</span>
+          <span class="text-[10px] text-amber-400">进入钱包 &gt;</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-center bg-slate-900 p-3 rounded-xl">
+          <div>
+            <div class="text-[10px] text-slate-400">可用资金</div>
+            <div class="text-amber-400 font-black text-lg mt-0.5">¥ {{ currentUser ? currentUser.red_diamonds : 0 }}</div>
+          </div>
+          <div>
+            <div class="text-[10px] text-slate-400">冻结保证金</div>
+            <div class="text-orange-400 font-black text-lg mt-0.5">¥ {{ currentUser ? currentUser.frozen_diamonds : 0 }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 快捷功能九宫格 -->
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+          <span class="font-bold text-slate-200">发布的订单</span>
+          <span class="text-[10px] text-slate-500">查看 &gt;</span>
+        </div>
+        <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center">
+          <span class="font-bold text-slate-200">接手的订单</span>
+          <span class="text-[10px] text-slate-500">收益 &gt;</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 发布需求 Modal 弹窗 ================= -->
+    <div v-if="showModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-slate-800 border border-slate-700 w-full max-w-sm rounded-2xl p-5 space-y-3">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-2">
+          <h3 class="font-black text-sm text-amber-400">发布自定义代练需求</h3>
+          <button @click="showModal = false" class="text-slate-400 font-bold text-lg">&times;</button>
+        </div>
+        <form @submit.prevent="createCustomOrder" class="space-y-2.5 text-xs">
+          <div>
+            <label class="text-slate-400">需求标题</label>
+            <input v-model="form.title" placeholder="如: 星曜3升王者3星 刷机定位" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white mt-1 outline-none focus:border-amber-400" required>
+          </div>
+          <div>
+            <label class="text-slate-400">游戏项目与区服</label>
+            <input v-model="form.gameName" placeholder="王者荣耀 - 安卓QQ" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white mt-1 outline-none focus:border-amber-400" required>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-slate-400">托管赏金 (元)</label>
+              <input v-model.number="form.bounty" type="number" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white mt-1 outline-none focus:border-amber-400" required>
+            </div>
+            <div>
+              <label class="text-slate-400">要求保证金 (元)</label>
+              <input v-model.number="form.deposit" type="number" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white mt-1 outline-none focus:border-amber-400" required>
+            </div>
+          </div>
+          <button type="submit" class="w-full bg-amber-500 text-slate-950 font-black py-2.5 rounded-xl transition mt-2">确认发布并预扣赏金</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ================= 底部固定 4 栏 Navigation Bar ================= -->
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-slate-800/95 border-t border-slate-700/80 backdrop-blur-lg grid grid-cols-4 py-2 px-1 z-40">
+      <button @click="activeTab = 'publish'" :class="['flex flex-col items-center justify-center gap-0.5', activeTab === 'publish' ? 'text-amber-400 font-extrabold' : 'text-slate-400']">
+        <span class="text-base">🎮</span>
+        <span class="text-[10px]">发单</span>
+      </button>
+
+      <button @click="activeTab = 'hall'" :class="['flex flex-col items-center justify-center gap-0.5', activeTab === 'hall' ? 'text-amber-400 font-extrabold' : 'text-slate-400']">
+        <span class="text-base">⚔️</span>
+        <span class="text-[10px]">接单</span>
+      </button>
+
+      <button @click="activeTab = 'msg'" :class="['flex flex-col items-center justify-center gap-0.5 relative', activeTab === 'msg' ? 'text-amber-400 font-extrabold' : 'text-slate-400']">
+        <span class="text-base">🔔</span>
+        <span class="absolute top-0.5 right-6 w-2 h-2 bg-red-500 rounded-full"></span>
+        <span class="text-[10px]">消息</span>
+      </button>
+
+      <button @click="activeTab = 'mine'" :class="['flex flex-col items-center justify-center gap-0.5', activeTab === 'mine' ? 'text-amber-400 font-extrabold' : 'text-slate-400']">
+        <span class="text-base">👤</span>
+        <span class="text-[10px]">我的</span>
+      </button>
+    </nav>
+
   </div>
 
   <script>
@@ -114,11 +355,21 @@
     createApp({
       data() {
         return {
-          users: [], currentUserId: null, currentUser: null, orders: [], activeStatus: '',
-          form: { title: '', gameName: '', gameRegion: '', bounty: 200, deposit: 100 },
+          activeTab: 'publish', // 当前切换的页面卡片 (publish, hall, msg, mine)
+          showModal: false,
+          users: [], currentUserId: null, currentUser: null, orders: [],
+          filterStatus: '',
+          form: { title: '', gameName: '王者荣耀', bounty: 30, deposit: 60 },
           statusOptions: [
-            { label: '全部', value: '' }, { label: '待接单', value: 0 },
-            { label: '代练中', value: 1 }, { label: '待验收', value: 2 }, { label: '已完成', value: 3 }
+            { label: '优选订单', value: '' },
+            { label: '待接单', value: 0 },
+            { label: '代练中', value: 1 },
+            { label: '已完成', value: 3 }
+          ],
+          presetPackages: [
+            { id: 1, title: '王者1星以下任意10星', desc: '全程托管 上分有保障', price: 20, originPrice: 108 },
+            { id: 2, title: '王者10星以下任意10颗星', desc: '打手交押 输一扣一', price: 25, originPrice: 118 },
+            { id: 3, title: '钻石4 3星-星耀3 1星', desc: '指定瑶/少司缘 120铭文', price: 29, originPrice: 90 }
           ]
         }
       },
@@ -128,28 +379,36 @@
       },
       methods: {
         async fetchUsers() {
-          const res = await fetch('/api/users');
-          const json = await res.json();
-          this.users = json.data;
-          if (this.users.length && !this.currentUserId) {
-            this.currentUserId = this.users[0].id;
-            this.currentUser = this.users[0];
-          }
+          try {
+            const res = await fetch('/api/users');
+            const json = await res.json();
+            this.users = json.data || [];
+            if (this.users.length && !this.currentUserId) {
+              this.currentUserId = this.users[0].id;
+              this.currentUser = this.users[0];
+            }
+          } catch (e) { console.error("加载用户失败", e); }
         },
         fetchUserData() {
           this.currentUser = this.users.find(u => u.id === this.currentUserId);
         },
         async fetchOrders() {
-          const url = this.activeStatus !== '' ? `/api/orders?status=${this.activeStatus}` : '/api/orders';
-          const res = await fetch(url);
-          const json = await res.json();
-          this.orders = json.data;
+          try {
+            const url = this.filterStatus !== '' ? `/api/orders?status=${this.filterStatus}` : '/api/orders';
+            const res = await fetch(url);
+            const json = await res.json();
+            this.orders = json.data || [];
+          } catch (e) { console.error("加载订单失败", e); }
         },
-        setStatus(val) {
-          this.activeStatus = val;
+        setStatusFilter(val) {
+          this.filterStatus = val;
           this.fetchOrders();
         },
-        async createOrder() {
+        async createCustomOrder() {
+          if (!this.currentUser || this.currentUser.role !== 'employer') {
+            alert("切换为老板账号后方可发单！");
+            return;
+          }
           const res = await fetch('/api/orders/create', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -157,11 +416,22 @@
           });
           const json = await res.json();
           if (json.success) {
-            alert(`发单成功！单号: ${json.data.displayId}`);
-            this.form.title = '';
+            alert(`发单成功！公开防重单号: ${json.data.displayId}`);
+            this.showModal = false;
             await this.fetchUsers();
             await this.fetchOrders();
           } else alert(json.message);
+        },
+        async quickPublish(gameName) {
+          this.form.gameName = gameName;
+          this.form.title = `${gameName} 指定段位速上`;
+          this.showModal = true;
+        },
+        async publishPresetPackage(pkg) {
+          this.form.title = pkg.title;
+          this.form.bounty = pkg.price;
+          this.form.deposit = pkg.price * 2;
+          this.showModal = true;
         },
         async acceptOrder(orderId) {
           const res = await fetch('/api/orders/accept', {
@@ -171,7 +441,7 @@
           });
           const json = await res.json();
           if (json.success) {
-            alert(json.message);
+            alert("抢单成功！保证金已冻结");
             await this.fetchUsers();
             await this.fetchOrders();
           } else alert(json.message);
@@ -180,11 +450,11 @@
           const res = await fetch('/api/orders/complete', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ orderId, boosterId: this.currentUserId, proofImg: '完工截图凭证' })
+            body: JSON.stringify({ orderId, boosterId: this.currentUserId, proofImg: '完工凭证' })
           });
           const json = await res.json();
           if (json.success) {
-            alert(json.message);
+            alert("已提交完工，等待老板确认");
             await this.fetchOrders();
           }
         },
@@ -196,13 +466,13 @@
           });
           const json = await res.json();
           if (json.success) {
-            alert("结算成功！赏金与保证金已自动打入打手可用余额");
+            alert("确认结算成功！赏金与解冻保证金已打入打手账户");
             await this.fetchUsers();
             await this.fetchOrders();
           }
         },
         statusText(s) { return ['待接单', '代练中', '待验收', '已完成', '维权中'][s] || '未知'; },
-        statusColor(s) {
+        statusBadgeColor(s) {
           return ['bg-amber-500/20 text-amber-400', 'bg-blue-500/20 text-blue-400', 'bg-indigo-500/20 text-indigo-400', 'bg-emerald-500/20 text-emerald-400', 'bg-red-500/20 text-red-400'][s];
         }
       }
