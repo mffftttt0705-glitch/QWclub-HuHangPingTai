@@ -1,207 +1,171 @@
+export default {
+  async fetch(request, env, ctx) {
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Content-Type': 'application/json; charset=utf-8'
+    };
 
-const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const cors = require('cors');
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// 连接 SQLite 数据库 (如部署至 Cloudflare Workers/Pages，请替换为 env.DB.prepare)
-const db = new sqlite3.Database('./database.db');
-
-// 初始化数据库结构
-db.serialize(() => {
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_code TEXT UNIQUE NOT NULL,
-        username TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL CHECK (role IN ('employer', 'booster', 'admin')),
-        balance REAL DEFAULT 0.00,
-        frozen_deposit REAL DEFAULT 0.00,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    db.run(`CREATE TABLE IF NOT EXISTS orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        display_id TEXT UNIQUE NOT NULL,
-        employer_id INTEGER NOT NULL,
-        booster_id INTEGER DEFAULT NULL,
-        title TEXT NOT NULL,
-        game_name TEXT NOT NULL,
-        game_region TEXT,
-        time_limit TEXT,
-        description TEXT,
-        bounty REAL NOT NULL,
-        deposit REAL DEFAULT 0.00,
-        status INTEGER DEFAULT 0,
-        proof_img TEXT DEFAULT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // 默认创建/重置系统管理员账号：admin / admin123
-    db.run(`INSERT OR REPLACE INTO users (id, user_code, username, password_hash, role, balance, frozen_deposit) 
-            VALUES (1, 'ADM001', 'admin', 'admin123', 'admin', 10000.00, 0.00)`);
-});
-
-// ==================== 1. 用户认证与登录/注册接口 (已修复) ====================
-
-// 用户登录
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ error: '请输入账号名称和密码' });
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
     }
 
-    db.get(`SELECT id, user_code, username, role, balance, frozen_deposit, password_hash FROM users WHERE username = ?`, [username.trim()], (err, user) => {
-        if (err) {
-            console.error("登录数据库查询失败:", err);
-            return res.status(500).json({ error: '数据库查询失败，请稍后重试' });
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    try {
+      // 1. 用户登录接口
+      if (path === '/api/login' && request.method === 'POST') {
+        const { username, password } = await request.json();
+        if (!username || !password) {
+          return new Response(JSON.stringify({ error: '请输入账号名称和密码' }), { status: 400, headers: corsHeaders });
         }
+
+        const user = await env.DB.prepare(
+          'SELECT id, user_code, username, role, balance, frozen_deposit, password_hash FROM users WHERE username = ?'
+        ).bind(username.trim()).first();
+
         if (!user) {
-            return res.status(400).json({ error: '账号不存在，请检查或先注册账号' });
+          return new Response(JSON.stringify({ error: '账号不存在，请检查或先注册账号' }), { status: 400, headers: corsHeaders });
         }
         if (user.password_hash !== password.trim()) {
-            return res.status(400).json({ error: '密码错误，请重新输入' });
+          return new Response(JSON.stringify({ error: '密码错误，请重新输入' }), { status: 400, headers: corsHeaders });
         }
-        
+
         const { password_hash, ...userInfo } = user;
-        res.json({ success: true, user: userInfo });
-    });
-});
+        return new Response(JSON.stringify({ success: true, user: userInfo }), { headers: corsHeaders });
+      }
 
-// 用户注册
-app.post('/api/register', (req, res) => {
-    const { username, password, role, adminKey } = req.body;
+      // 2. 用户注册接口
+      if (path === '/api/register' && request.method === 'POST') {
+        const { username, password, role, adminKey } = await request.json();
+        if (!username || !password || !role) {
+          return new Response(JSON.stringify({ error: '请完整填写注册信息' }), { status: 400, headers: corsHeaders });
+        }
 
-    if (!username || !password || !role) {
-        return res.status(400).json({ error: '请完整填写注册信息' });
-    }
+        if (role === 'admin' && adminKey !== 'admin888') {
+          return new Response(JSON.stringify({ error: '管理员注册授权密钥不正确！' }), { status: 400, headers: corsHeaders });
+        }
 
-    // 管理员注册校验
-    if (role === 'admin' && adminKey !== 'admin888') {
-        return res.status(400).json({ error: '管理员注册授权密钥不正确！' });
-    }
-
-    // 先检查用户名是否重复
-    db.get(`SELECT id FROM users WHERE username = ?`, [username.trim()], (err, row) => {
-        if (row) {
-            return res.status(400).json({ error: '该账号名称已被注册，请更换名称' });
+        const existingUser = await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username.trim()).first();
+        if (existingUser) {
+          return new Response(JSON.stringify({ error: '该账号名称已被注册，请更换名称' }), { status: 400, headers: corsHeaders });
         }
 
         const prefix = role === 'admin' ? 'ADM' : (role === 'employer' ? 'EMP' : 'BST');
         const userCode = prefix + Math.floor(100000 + Math.random() * 900000);
 
-        const sql = `INSERT INTO users (user_code, username, password_hash, role, balance, frozen_deposit) VALUES (?, ?, ?, ?, 0.00, 0.00)`;
-        db.run(sql, [userCode, username.trim(), password.trim(), role], function(err) {
-            if (err) {
-                console.error("注册写入失败:", err);
-                return res.status(400).json({ error: '账号注册失败，请更换账号名重试' });
-            }
+        const result = await env.DB.prepare(
+          'INSERT INTO users (user_code, username, password_hash, role, balance, frozen_deposit) VALUES (?, ?, ?, ?, 0.00, 0.00)'
+        ).bind(userCode, username.trim(), password.trim(), role).run();
 
-            res.json({
-                success: true,
-                user: { id: this.lastID, user_code: userCode, username: username.trim(), role, balance: 0.00, frozen_deposit: 0.00 }
-            });
-        });
-    });
-});
+        return new Response(JSON.stringify({
+          success: true,
+          user: { id: result.meta.last_row_id, user_code: userCode, username: username.trim(), role, balance: 0.00, frozen_deposit: 0.00 }
+        }), { headers: corsHeaders });
+      }
 
-// 获取个人最新信息
-app.get('/api/user/:id', (req, res) => {
-    db.get(`SELECT id, user_code, username, role, balance, frozen_deposit FROM users WHERE id = ?`, [req.params.id], (err, user) => {
-        if (err || !user) return res.status(404).json({ error: '用户不存在' });
-        res.json(user);
-    });
-});
+      // 3. 获取用户最新状态
+      if (path.startsWith('/api/user/') && request.method === 'GET') {
+        const userId = path.split('/')[3];
+        const user = await env.DB.prepare(
+          'SELECT id, user_code, username, role, balance, frozen_deposit FROM users WHERE id = ?'
+        ).bind(userId).first();
 
-// ==================== 2. 订单与交易流程接口 ====================
+        if (!user) return new Response(JSON.stringify({ error: '未找到该用户' }), { status: 404, headers: corsHeaders });
+        return new Response(JSON.stringify(user), { headers: corsHeaders });
+      }
 
-app.get('/api/orders/list', (req, res) => {
-    db.all(`SELECT * FROM orders ORDER BY id DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: '获取订单列表失败' });
-        res.json(rows);
-    });
-});
+      // 4. 获取订单列表
+      if (path === '/api/orders/list' && request.method === 'GET') {
+        const { results } = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC').all();
+        return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+      }
 
-app.post('/api/orders/create', (req, res) => {
-    const { employerId, title, gameName, gameRegion, timeLimit, description, bounty, deposit } = req.body;
-    const displayId = 'QW' + Date.now().toString().slice(-8);
+      // 5. 发布需求订单
+      if (path === '/api/orders/create' && request.method === 'POST') {
+        const { employerId, title, gameName, gameRegion, timeLimit, description, bounty, deposit } = await request.json();
+        const displayId = 'QW' + Date.now().toString().slice(-8);
 
-    const sql = `INSERT INTO orders (display_id, employer_id, title, game_name, game_region, time_limit, description, bounty, deposit) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    db.run(sql, [displayId, employerId, title, gameName, gameRegion, timeLimit, description, bounty, deposit], function(err) {
-        if (err) return res.status(500).json({ error: '发布订单失败' });
-        res.json({ success: true, orderId: this.lastID });
-    });
-});
+        const result = await env.DB.prepare(
+          'INSERT INTO orders (display_id, employer_id, title, game_name, game_region, time_limit, description, bounty, deposit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).bind(displayId, employerId, title, gameName, gameRegion, timeLimit, description, bounty, deposit).run();
 
-app.post('/api/orders/accept', (req, res) => {
-    const { orderId, boosterId } = req.body;
-    db.get(`SELECT * FROM orders WHERE id = ?`, [orderId], (err, order) => {
-        if (!order || order.status !== 0) return res.status(400).json({ error: '该订单不可接单' });
+        return new Response(JSON.stringify({ success: true, orderId: result.meta.last_row_id }), { headers: corsHeaders });
+      }
 
-        db.get(`SELECT balance FROM users WHERE id = ?`, [boosterId], (err, booster) => {
-            if (!booster || booster.balance < order.deposit) {
-                return res.status(400).json({ error: `可用余额不足！接此单需扣除保证金 ¥${order.deposit}` });
-            }
+      // 6. 打手抢单
+      if (path === '/api/orders/accept' && request.method === 'POST') {
+        const { orderId, boosterId } = await request.json();
 
-            db.serialize(() => {
-                db.run(`UPDATE users SET balance = balance - ?, frozen_deposit = frozen_deposit + ? WHERE id = ?`, [order.deposit, order.deposit, boosterId]);
-                db.run(`UPDATE orders SET booster_id = ?, status = 1 WHERE id = ?`, [boosterId, orderId], (err) => {
-                    res.json({ success: true });
-                });
-            });
-        });
-    });
-});
+        const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first();
+        if (!order || order.status !== 0) {
+          return new Response(JSON.stringify({ error: '该订单状态不可接单' }), { status: 400, headers: corsHeaders });
+        }
 
-app.post('/api/orders/complete', (req, res) => {
-    const { orderId, proofImg } = req.body;
-    db.run(`UPDATE orders SET proof_img = ?, status = 2 WHERE id = ?`, [proofImg, orderId], (err) => {
-        if (err) return res.status(500).json({ error: '提交失败' });
-        res.json({ success: true });
-    });
-});
+        const booster = await env.DB.prepare('SELECT balance FROM users WHERE id = ?').bind(boosterId).first();
+        if (!booster || booster.balance < order.deposit) {
+          return new Response(JSON.stringify({ error: `可用余额不足！抢此单需扣除保证金 ¥${order.deposit}` }), { status: 400, headers: corsHeaders });
+        }
 
-app.post('/api/orders/confirm', (req, res) => {
-    const { orderId } = req.body;
-    db.run(`UPDATE orders SET status = 3 WHERE id = ?`, [orderId], (err) => {
-        if (err) return res.status(500).json({ error: '操作失败' });
-        res.json({ success: true });
-    });
-});
+        // 事务或批处理更新余额与订单状态
+        await env.DB.batch([
+          env.DB.prepare('UPDATE users SET balance = balance - ?, frozen_deposit = frozen_deposit + ? WHERE id = ?').bind(order.deposit, order.deposit, boosterId),
+          env.DB.prepare('UPDATE orders SET booster_id = ?, status = 1 WHERE id = ?').bind(boosterId, orderId)
+        ]);
 
-app.post('/api/orders/admin-settle', (req, res) => {
-    const { orderId } = req.body;
-    db.get(`SELECT * FROM orders WHERE id = ?`, [orderId], (err, order) => {
-        if (!order || order.status !== 3) return res.status(400).json({ error: '订单未处于可结算状态' });
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+
+      // 7. 提交完工凭证
+      if (path === '/api/orders/complete' && request.method === 'POST') {
+        const { orderId, proofImg } = await request.json();
+        await env.DB.prepare('UPDATE orders SET proof_img = ?, status = 2 WHERE id = ?').bind(proofImg, orderId).run();
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+
+      // 8. 派单员验收
+      if (path === '/api/orders/confirm' && request.method === 'POST') {
+        const { orderId } = await request.json();
+        await env.DB.prepare('UPDATE orders SET status = 3 WHERE id = ?').bind(orderId).run();
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
+
+      // 9. 管理员打款结算
+      if (path === '/api/orders/admin-settle' && request.method === 'POST') {
+        const { orderId } = await request.json();
+        const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ?').bind(orderId).first();
+        if (!order || order.status !== 3) {
+          return new Response(JSON.stringify({ error: '订单未处于可结算状态' }), { status: 400, headers: corsHeaders });
+        }
+
         const totalPay = order.bounty + order.deposit;
+        await env.DB.batch([
+          env.DB.prepare('UPDATE users SET balance = balance + ?, frozen_deposit = frozen_deposit - ? WHERE id = ?').bind(totalPay, order.deposit, order.booster_id),
+          env.DB.prepare('UPDATE orders SET status = 4 WHERE id = ?').bind(orderId)
+        ]);
 
-        db.serialize(() => {
-            db.run(`UPDATE users SET balance = balance + ?, frozen_deposit = frozen_deposit - ? WHERE id = ?`, [totalPay, order.deposit, order.booster_id]);
-            db.run(`UPDATE orders SET status = 4 WHERE id = ?`, [orderId], (err) => {
-                res.json({ success: true });
-            });
-        });
-    });
-});
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
 
-app.get('/api/admin/users', (req, res) => {
-    db.all(`SELECT id, user_code, username, role, balance, frozen_deposit FROM users ORDER BY id DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: '获取失败' });
-        res.json(rows);
-    });
-});
+      // 10. 管理员获取用户列表与调账
+      if (path === '/api/admin/users' && request.method === 'GET') {
+        const { results } = await env.DB.prepare('SELECT id, user_code, username, role, balance, frozen_deposit FROM users ORDER BY id DESC').all();
+        return new Response(JSON.stringify(results || []), { headers: corsHeaders });
+      }
 
-app.post('/api/admin/adjust-balance', (req, res) => {
-    const { targetUserId, amount, type } = req.body;
-    const adjustVal = type === 'add' ? amount : -amount;
-    db.run(`UPDATE users SET balance = balance + ? WHERE id = ?`, [adjustVal, targetUserId], (err) => {
-        if (err) return res.status(500).json({ error: '调账失败' });
-        res.json({ success: true });
-    });
-});
+      if (path === '/api/admin/adjust-balance' && request.method === 'POST') {
+        const { targetUserId, amount, type } = await request.json();
+        const adjustVal = type === 'add' ? amount : -amount;
+        await env.DB.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').bind(adjustVal, targetUserId).run();
+        return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+      }
 
-app.listen(3000, () => console.log('QW电竞外派后端服务已正常启动，端口: 3000'));
+      return new Response(JSON.stringify({ error: '接口未找到' }), { status: 404, headers: corsHeaders });
+
+    } catch (err) {
+      return new Response(JSON.stringify({ error: '服务器响应异常: ' + err.message }), { status: 500, headers: corsHeaders });
+    }
+  }
+};
