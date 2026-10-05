@@ -1,7 +1,7 @@
-name = "qw-booster-platform"
+name = "qw-huhang"
 pages_build_output_dir = "./public"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "booster-db"
-database_id = "你的_D1_DATABASE_ID"  # 在 Cloudflare D1 创建后将 ID 填入此处
+database_name = "qwwp-sql"
+database_id = "66acb041-adcf-42e5-8328-65cd417c57d5"
