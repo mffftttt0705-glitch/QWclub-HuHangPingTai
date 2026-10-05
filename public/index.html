@@ -6,6 +6,7 @@
   <title>QW电竞外派 - 专业电竞外派平台</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -52,48 +53,19 @@
             <span class="bg-amber-400 text-slate-900 font-black text-[9px] px-2 py-0.5 rounded-full">发单</span>
           </div>
         </div>
-        <div v-else class="text-xs text-center py-4 text-blue-100/80">暂无托管类目，请管理员在“我的”页面添加</div>
-      </div>
-
-      <!-- 精选套餐 -->
-      <div>
-        <div class="flex justify-between items-center mb-2.5">
-          <h3 class="font-extrabold text-sm text-slate-800 flex items-center gap-1.5">
-            <i data-lucide="zap" class="w-4 h-4 text-amber-500 fill-amber-500"></i>
-            <span>精选定制套餐</span>
-          </h3>
-        </div>
-        <div v-if="presetPackages.length > 0" class="space-y-2">
-          <div v-for="pkg in presetPackages" :key="pkg.id" class="bg-slate-50 p-3 rounded-xl border border-slate-200/80 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 font-black text-xs">
-                QW
-              </div>
-              <div>
-                <h4 class="font-bold text-xs text-slate-800">{{ pkg.title }}</h4>
-                <p class="text-[10px] text-slate-400 mt-0.5">{{ pkg.desc }}</p>
-              </div>
-            </div>
-            <div class="text-right">
-              <div class="text-red-500 font-black text-sm">¥ {{ pkg.price }} <span v-if="pkg.originPrice" class="text-[10px] text-slate-400 line-through font-normal">¥{{ pkg.originPrice }}</span></div>
-              <button @click="publishPresetPackage(pkg)" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-[11px] font-black px-3 py-1 rounded-full mt-1 shadow-sm">
-                一键发布
-              </button>
-            </div>
-          </div>
-        </div>
+        <div v-else class="text-xs text-center py-4 text-blue-100/80">暂无托管类目</div>
       </div>
     </div>
 
     <!-- ================= 2. 接单大厅 (Tab: hall) ================= -->
     <div v-show="activeTab === 'hall'" class="p-4 space-y-3">
-      <!-- 搜索与筛选 -->
+      <!-- 搜索与刷新 -->
       <div class="flex gap-2 items-center">
         <div class="flex-1 bg-slate-100 border border-slate-200 rounded-full px-3.5 py-1.5 flex items-center gap-2 text-xs text-slate-400">
           <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400"></i>
           <input type="text" v-model="searchKeyword" placeholder="搜索游戏 / 段位 / 包含要求" class="bg-transparent border-none outline-none w-full text-slate-700 placeholder-slate-400">
         </div>
-        <button @click="renderIcons" class="bg-slate-100 hover:bg-slate-200 border border-slate-200 p-2 rounded-full text-slate-600">
+        <button @click="loadOrders" class="bg-slate-100 hover:bg-slate-200 border border-slate-200 p-2 rounded-full text-slate-600">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -125,7 +97,6 @@
 
           <h4 class="font-bold text-sm text-slate-800 leading-snug">{{ order.title }}</h4>
 
-          <!-- 游戏类目、区服与详细描述 -->
           <div class="text-[11px] text-slate-500 flex flex-wrap gap-1.5">
             <span class="bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded">{{ order.game_name }}</span>
             <span v-if="order.game_region" class="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">{{ order.game_region }}</span>
@@ -141,7 +112,7 @@
             <div class="text-slate-700 whitespace-pre-wrap leading-relaxed">{{ order.description || '无特殊要求' }}</div>
           </div>
 
-          <!-- 赏金与保证金信息 -->
+          <!-- 赏金与保证金 -->
           <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl text-center border border-slate-100">
             <div>
               <div class="text-[10px] text-slate-400">派单托管赏金</div>
@@ -153,56 +124,50 @@
             </div>
           </div>
 
-          <div class="flex justify-between items-center text-[11px] text-slate-400 pt-0.5">
-            <span>派单员: <strong class="text-slate-700">{{ order.employer_name }}</strong></span>
-            <span v-if="order.booster_name">接单打手: <strong class="text-slate-700">{{ order.booster_name }}</strong></span>
-          </div>
-
-          <!-- 完工凭证信息 (已提交/已确认/已结算) -->
-          <div v-if="order.proofImg" class="bg-emerald-50 p-2 rounded-lg text-xs text-emerald-800 border border-emerald-100 flex items-center justify-between">
+          <!-- 完工凭证信息 -->
+          <div v-if="order.proof_img" class="bg-emerald-50 p-2 rounded-lg text-xs text-emerald-800 border border-emerald-100 flex items-center justify-between">
             <span class="flex items-center gap-1 font-medium">
               <i data-lucide="image" class="w-3.5 h-3.5 text-emerald-600"></i>
-              <span>打手完工凭证: {{ order.proofImg }}</span>
+              <span>完工凭证: {{ order.proof_img }}</span>
             </span>
             <span class="text-[10px] bg-emerald-200 text-emerald-900 font-bold px-1.5 py-0.5 rounded">已上传</span>
           </div>
 
-          <!-- 状态与完整流程操作按钮 -->
+          <!-- 操作按钮与流程状态 -->
           <div class="pt-1">
-            <!-- 步骤 1: 打手抢单 (状态 0 -> 1) -->
+            <!-- 1. 打手抢单 -->
             <button v-if="order.status === 0 && currentUser && currentUser.role === 'booster'" @click="acceptOrder(order)" 
-              class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-2 rounded-xl text-xs transition shadow-md shadow-emerald-500/15 flex justify-center items-center gap-1">
+              class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-2 rounded-xl text-xs transition shadow-md flex justify-center items-center gap-1">
               <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
-              <span>1. 立即接单 (扣除保证金 ¥{{ order.deposit }})</span>
+              <span>1. 立即接单 (冻结保证金 ¥{{ order.deposit }})</span>
             </button>
 
-            <!-- 步骤 2: 打手完成服务 (状态 1 -> 2) -->
+            <!-- 2. 打手提交完工服务 -->
             <button v-if="order.status === 1 && currentUser && currentUser.id === order.booster_id" @click="completeOrder(order)" 
               class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2 rounded-xl text-xs transition shadow-md flex justify-center items-center gap-1">
               <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
-              <span>2. 打手提交完工凭证</span>
+              <span>2. 提交完工凭证</span>
             </button>
 
-            <!-- 步骤 3: 派单员确认订单 (状态 2 -> 3) -->
+            <!-- 3. 派单员确认订单 -->
             <button v-if="order.status === 2 && currentUser && (currentUser.id === order.employer_id || currentUser.role === 'admin')" @click="confirmOrder(order)" 
               class="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-2 rounded-xl text-xs transition shadow-md flex justify-center items-center gap-1">
               <i data-lucide="award" class="w-3.5 h-3.5"></i>
-              <span>3. 派单员验收无误 (等待结算)</span>
+              <span>3. 派单员验收无误 (提交管理员打款)</span>
             </button>
 
-            <!-- 步骤 4: 管理员最终结算资金 (状态 3 -> 4) -->
+            <!-- 4. 管理员结算打款 -->
             <button v-if="order.status === 3 && currentUser && currentUser.role === 'admin'" @click="adminSettleOrder(order)" 
               class="w-full bg-purple-600 hover:bg-purple-700 text-white font-black py-2 rounded-xl text-xs transition shadow-md flex justify-center items-center gap-1">
               <i data-lucide="dollar-sign" class="w-3.5 h-3.5"></i>
-              <span>4. 管理员一键打款结算 (赏金发放 + 退保证金)</span>
+              <span>4. 管理员一键打款结算 (结清赏金+退保证金)</span>
             </button>
 
-            <!-- 引导提示 -->
             <div v-if="order.status === 0 && currentUser && currentUser.role !== 'booster'" class="text-[10px] text-center text-slate-400 py-1">
-              提示: 需切换为【打手】角色即可抢单
+              提示: 需在“我的”页面切换为【打手】身份接单
             </div>
             <div v-if="order.status === 3 && currentUser && currentUser.role !== 'admin'" class="text-[10px] text-center text-amber-600 font-bold py-1">
-              派单已确认，正等待管理员进行资金结算打款
+              订单已验收，等待平台管理员打款结算
             </div>
             <div v-if="order.status === 4" class="text-[10px] text-center text-emerald-600 font-bold py-1 flex items-center justify-center gap-1">
               <i data-lucide="check-check" class="w-3 h-3"></i>
@@ -217,105 +182,43 @@
     <div v-show="activeTab === 'msg'" class="p-4 space-y-4">
       <div class="flex justify-between items-center pt-2 border-b border-slate-100 pb-2">
         <h2 class="text-xl font-black text-slate-800">消息通知</h2>
-        <span class="text-xs text-blue-600 font-bold cursor-pointer">全部已读</span>
       </div>
-
       <div class="space-y-2 pt-1">
         <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex items-center gap-3">
           <div class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center">
             <i data-lucide="shield" class="w-4 h-4"></i>
           </div>
           <div class="flex-1">
-            <div class="flex justify-between items-center">
-              <h4 class="font-bold text-xs text-slate-800">QW电竞外派系统</h4>
-              <span class="text-[9px] text-slate-400">系统</span>
-            </div>
-            <p class="text-[11px] text-slate-500 mt-0.5">欢迎来到QW电竞外派平台，订单资金由平台托管担保，流程更规范保障权益！</p>
+            <h4 class="font-bold text-xs text-slate-800">QW电竞外派系统</h4>
+            <p class="text-[11px] text-slate-500 mt-0.5">欢迎使用！订单赏金由平台全程托管担保。</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- ================= 4. 我的 / 身份与管理员控制台 (Tab: mine) ================= -->
+    <!-- ================= 4. 我的 / 个人中心与管理员功能 (Tab: mine) ================= -->
     <div v-show="activeTab === 'mine'" class="p-4 space-y-4">
-      <!-- 个人账号卡片 -->
+      <!-- 账号卡片 -->
       <div class="bg-gradient-to-br from-slate-900 to-slate-800 p-4 rounded-2xl text-white shadow-xl relative overflow-hidden">
         <div class="flex justify-between items-center mb-3">
           <div class="flex items-center gap-3">
             <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center font-black text-white text-base shadow-md">
-              {{ currentUser ? currentUser.username.substring(0, 1) : '游' }}
+              {{ currentUser ? currentUser.username.substring(0, 1) : '未' }}
             </div>
             <div>
               <h3 class="font-black text-sm flex items-center gap-2">
                 <span>{{ currentUser ? currentUser.username : '未登录' }}</span>
-                <span :class="['text-[9px] font-bold px-2 py-0.5 rounded-full border', roleBadgeStyle(currentUser ? currentUser.role : '')]">
-                  {{ roleText(currentUser ? currentUser.role : '') }}
+                <span v-if="currentUser" :class="['text-[9px] font-bold px-2 py-0.5 rounded-full border', roleBadgeStyle(currentUser.role)]">
+                  {{ roleText(currentUser.role) }}
                 </span>
               </h3>
-              <p class="text-[10px] text-slate-400 font-mono mt-0.5">工号: {{ currentUser ? currentUser.user_code : 'GUEST' }}</p>
+              <p class="text-[10px] text-slate-400 font-mono mt-0.5">编号: {{ currentUser ? currentUser.user_code : 'GUEST' }}</p>
             </div>
           </div>
           <button @click="showAuthModal = true" class="text-xs bg-white/10 hover:bg-white/20 border border-white/20 px-2.5 py-1 rounded-full flex items-center gap-1">
             <i data-lucide="user-plus" class="w-3 h-3"></i>
-            <span>注册/切换</span>
+            <span>注册/登录</span>
           </button>
-        </div>
-
-        <!-- 派单员 与 打手 身份快速切换 -->
-        <div v-if="currentUser && (currentUser.role === 'employer' || currentUser.role === 'booster')" 
-             class="mt-3 pt-3 border-t border-white/10 flex justify-between items-center text-xs">
-          <span class="text-slate-300">模式切换:</span>
-          <button @click="toggleEmployerBoosterRole" class="bg-blue-500 hover:bg-blue-600 text-white font-bold px-3 py-1 rounded-lg text-xs flex items-center gap-1 transition">
-            <i data-lucide="repeat" class="w-3 h-3"></i>
-            <span>切为【{{ currentUser.role === 'employer' ? '打手接单模式' : '派单员模式' }}】</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 管理员专属控制台 (仅管理员可见) -->
-      <div v-if="currentUser && currentUser.role === 'admin'" class="bg-purple-50 p-4 rounded-2xl border border-purple-200 space-y-3">
-        <div class="flex justify-between items-center border-b border-purple-200 pb-2">
-          <h3 class="font-black text-xs text-purple-900 flex items-center gap-1.5">
-            <i data-lucide="settings" class="w-4 h-4 text-purple-600"></i>
-            <span>管理员专属控制台</span>
-          </h3>
-          <span class="text-[10px] bg-purple-200 text-purple-800 font-bold px-2 py-0.5 rounded">密钥验证通关</span>
-        </div>
-
-        <!-- 1. 管理员可直接在此删除/编辑平台订单 -->
-        <div class="space-y-2">
-          <div class="flex justify-between items-center text-xs font-bold text-slate-700">
-            <span>接单大厅订单全面管理 ({{ orders.length }})</span>
-          </div>
-          <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-            <div v-for="ord in orders" :key="ord.id" class="flex justify-between items-center bg-white p-2 rounded-lg border border-purple-100 text-xs">
-              <div class="truncate max-w-[180px]">
-                <span class="font-bold text-slate-800">#{{ ord.display_id }} {{ ord.title }}</span>
-                <div class="text-[9px] text-slate-400">状态: {{ statusText(ord.status) }}</div>
-              </div>
-              <div class="flex gap-1">
-                <button @click="editOrderDescriptionPrompt(ord)" class="text-blue-600 text-[10px] bg-blue-50 px-1.5 py-0.5 rounded">编辑要求</button>
-                <button @click="deleteOrder(ord.id)" class="text-red-500 text-[10px] bg-red-50 px-1.5 py-0.5 rounded">删除</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 2. 管理员: 托管游戏类目与套餐设置 -->
-        <div class="space-y-2 pt-2 border-t border-purple-200/60">
-          <div class="flex justify-between items-center text-xs font-bold text-slate-700">
-            <span>配置托管发单游戏类目</span>
-            <button @click="addCategoryPrompt" class="text-purple-600 text-[11px] hover:underline">+ 新增类目</button>
-          </div>
-          <div class="space-y-1.5">
-            <div v-for="(cat, idx) in gameCategories" :key="idx" class="flex justify-between items-center bg-white p-2 rounded-lg border border-purple-100 text-xs">
-              <div>
-                <span class="font-bold text-slate-800">{{ cat.name }}</span>
-                <span class="text-[10px] text-slate-400 ml-2">({{ cat.tag }})</span>
-              </div>
-              <button @click="removeCategory(idx)" class="text-red-500 text-[10px]">删除</button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -326,115 +229,135 @@
             <i data-lucide="wallet" class="w-4 h-4 text-blue-600"></i>
             <span>个人资产中心</span>
           </span>
-          <button @click="rechargeFunds" class="text-[11px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full hover:bg-blue-100">+ 充值余额</button>
         </div>
         <div class="grid grid-cols-2 gap-2 text-center bg-slate-50 p-3 rounded-xl border border-slate-100">
           <div>
             <div class="text-[10px] text-slate-400">可用资金余额</div>
-            <div class="text-red-500 font-black text-lg mt-0.5">¥ {{ currentUser ? currentUser.balance.toFixed(2) : '0.00' }}</div>
+            <div class="text-red-500 font-black text-lg mt-0.5">¥ {{ currentUser ? Number(currentUser.balance).toFixed(2) : '0.00' }}</div>
           </div>
           <div>
-            <div class="text-[10px] text-slate-400">冻结保证金押金</div>
-            <div class="text-orange-500 font-black text-lg mt-0.5">¥ {{ currentUser ? currentUser.frozen_deposit.toFixed(2) : '0.00' }}</div>
+            <div class="text-[10px] text-slate-400">冻结保证金</div>
+            <div class="text-orange-500 font-black text-lg mt-0.5">¥ {{ currentUser ? Number(currentUser.frozen_deposit).toFixed(2) : '0.00' }}</div>
           </div>
         </div>
       </div>
 
-      <!-- 选择其他测试账号切换 -->
-      <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1.5">
-        <label class="text-slate-500 font-bold flex items-center gap-1">
-          <i data-lucide="users" class="w-3.5 h-3.5 text-slate-500"></i>
-          <span>切换模拟操作账号：</span>
-        </label>
-        <select v-model="currentUserId" @change="fetchUserData" class="w-full bg-white border border-slate-300 rounded-lg p-2 text-slate-800 font-bold outline-none">
-          <option v-for="u in users" :key="u.id" :value="u.id">
-            {{ u.username }} ({{ roleText(u.role) }}) - 余额: ¥{{ u.balance }}
-          </option>
-        </select>
+      <!-- 管理员专属控制台 (仅管理员可用) -->
+      <div v-if="currentUser && currentUser.role === 'admin'" class="bg-purple-50 p-4 rounded-2xl border border-purple-200 space-y-4">
+        <div class="flex justify-between items-center border-b border-purple-200 pb-2">
+          <h3 class="font-black text-xs text-purple-900 flex items-center gap-1.5">
+            <i data-lucide="settings" class="w-4 h-4 text-purple-600"></i>
+            <span>管理员控制台 (用户调账与管理)</span>
+          </h3>
+          <span class="text-[10px] bg-purple-200 text-purple-800 font-bold px-2 py-0.5 rounded">管理特权</span>
+        </div>
+
+        <!-- 1. 管理员对所有用户加/扣余额 -->
+        <div class="space-y-2">
+          <div class="text-xs font-bold text-slate-700 flex justify-between items-center">
+            <span>注册用户资产管理 (加/扣余额)</span>
+            <button @click="loadAllUsers" class="text-[10px] text-purple-600 underline">刷新列表</button>
+          </div>
+          <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            <div v-for="u in userList" :key="u.id" class="flex justify-between items-center bg-white p-2 rounded-lg border border-purple-100 text-xs">
+              <div>
+                <span class="font-bold text-slate-800">{{ u.username }}</span>
+                <span class="text-[10px] text-slate-400 ml-1">({{ roleText(u.role) }})</span>
+                <div class="text-[10px] text-red-500 font-bold">余额: ¥{{ Number(u.balance).toFixed(2) }}</div>
+              </div>
+              <div class="flex gap-1">
+                <button @click="adjustUserBalance(u, 'add')" class="text-emerald-600 text-[10px] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold">+ 加余额</button>
+                <button @click="adjustUserBalance(u, 'reduce')" class="text-red-600 text-[10px] bg-red-50 border border-red-200 px-2 py-0.5 rounded font-bold">- 扣余额</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 管理员大厅订单管理与删除 -->
+        <div class="space-y-2 pt-2 border-t border-purple-200/60">
+          <div class="text-xs font-bold text-slate-700">大厅订单全面管理/强删</div>
+          <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            <div v-for="ord in orders" :key="ord.id" class="flex justify-between items-center bg-white p-2 rounded-lg border border-purple-100 text-xs">
+              <div class="truncate max-w-[180px]">
+                <span class="font-bold text-slate-800">#{{ ord.display_id }} {{ ord.title }}</span>
+              </div>
+              <button @click="deleteOrder(ord.id)" class="text-red-500 text-[10px] bg-red-50 px-1.5 py-0.5 rounded">删除订单</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Modal 1: 丰富描述发布订单弹窗 -->
+    <!-- Modal 1: 发布订单弹窗 -->
     <div v-if="showPublishModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white border border-slate-200 w-full max-w-sm rounded-2xl p-5 space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-          <h3 class="font-black text-sm text-slate-800 flex items-center gap-1">
-            <i data-lucide="edit-3" class="w-4 h-4 text-blue-600"></i>
-            <span>发布外派需求订单</span>
-          </h3>
-          <button @click="showPublishModal = false" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+          <h3 class="font-black text-sm text-slate-800">发布外派需求订单</h3>
+          <button @click="showPublishModal = false" class="text-slate-400 font-bold text-lg">&times;</button>
         </div>
-        <form @submit.prevent="createCustomOrder" class="space-y-2.5 text-xs">
+        <form @submit.prevent="createOrder" class="space-y-2.5 text-xs">
           <div>
             <label class="text-slate-500 font-medium">代练需求标题</label>
-            <input v-model="form.title" placeholder="如: 王者荣耀 荣耀王者50星定位速升" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500 font-bold" required>
+            <input v-model="form.title" placeholder="如: 王者荣耀 荣耀王者50星速升" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 font-bold outline-none" required>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-slate-500 font-medium">游戏名称</label>
-              <input v-model="form.gameName" placeholder="王者荣耀" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500" required>
+              <input v-model="form.gameName" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 outline-none" required>
             </div>
             <div>
               <label class="text-slate-500 font-medium">游戏区服</label>
-              <input v-model="form.gameRegion" placeholder="微信手Q/安卓iOS" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500" required>
+              <input v-model="form.gameRegion" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 outline-none" required>
             </div>
           </div>
           <div>
             <label class="text-slate-500 font-medium">代练时限要求</label>
-            <input v-model="form.timeLimit" placeholder="如: 24小时内完工 / 12小时极速" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500" required>
+            <input v-model="form.timeLimit" placeholder="如: 24小时内完工" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 outline-none" required>
           </div>
           <div>
-            <label class="text-slate-500 font-medium">详细需求说明与禁忌描述 (丰富描述)</label>
-            <textarea v-model="form.description" rows="4" placeholder="请详细填写英雄指定、铭文要求、战绩隐私保护、禁止动用金币铭文以及违规扣罚要求等..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500" required></textarea>
+            <label class="text-slate-500 font-medium">详细描述与禁忌</label>
+            <textarea v-model="form.description" rows="3" placeholder="填写指定英雄、禁止动用金币铭文等要求..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 outline-none" required></textarea>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label class="text-slate-500 font-medium">托管赏金 (元)</label>
-              <input v-model.number="form.bounty" type="number" min="1" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500 font-bold text-red-500" required>
+              <input v-model.number="form.bounty" type="number" min="1" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 font-bold text-red-500 outline-none" required>
             </div>
             <div>
-              <label class="text-slate-500 font-medium">要求保证金 (元)</label>
-              <input v-model.number="form.deposit" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500 font-bold text-orange-500" required>
+              <label class="text-slate-500 font-medium">打手保证金 (元)</label>
+              <input v-model.number="form.deposit" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 font-bold text-orange-500 outline-none" required>
             </div>
           </div>
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2.5 rounded-xl transition shadow-md mt-2">确认发布并上架大厅</button>
+          <button type="submit" class="w-full bg-blue-600 text-white font-black py-2.5 rounded-xl shadow-md mt-2">确认发布并上架大厅</button>
         </form>
       </div>
     </div>
 
-    <!-- Modal 2: 注册/登录弹窗 -->
+    <!-- Modal 2: 注册 / 登录弹窗 -->
     <div v-if="showAuthModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white border border-slate-200 w-full max-w-sm rounded-2xl p-5 space-y-3 shadow-2xl">
         <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-          <h3 class="font-black text-sm text-slate-800 flex items-center gap-1">
-            <i data-lucide="user-check" class="w-4 h-4 text-blue-600"></i>
-            <span>创建 / 切换账号</span>
-          </h3>
-          <button @click="showAuthModal = false" class="text-slate-400 hover:text-slate-600 font-bold text-lg">&times;</button>
+          <h3 class="font-black text-sm text-slate-800">注册 / 登录平台账号</h3>
+          <button @click="showAuthModal = false" class="text-slate-400 font-bold text-lg">&times;</button>
         </div>
-
-        <form @submit.prevent="registerAccount" class="space-y-3 text-xs">
+        <form @submit.prevent="handleRegister" class="space-y-3 text-xs">
           <div>
             <label class="text-slate-500 font-medium">账号名称</label>
-            <input v-model="authForm.username" placeholder="设置用户名" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 mt-1 outline-none focus:border-blue-500" required>
+            <input v-model="authForm.username" placeholder="请输入用户名" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 outline-none" required>
           </div>
           <div>
-            <label class="text-slate-500 font-medium">选择身份角色</label>
-            <select v-model="authForm.role" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-slate-800 font-bold mt-1 outline-none">
-              <option value="employer">派单员 (发布订单)</option>
-              <option value="booster">打手 (接单代练)</option>
-              <option value="admin">管理员 (最终打款结算/控制台)</option>
+            <label class="text-slate-500 font-medium">密码</label>
+            <input v-model="authForm.password" type="password" placeholder="设置密码" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 mt-1 outline-none" required>
+          </div>
+          <div>
+            <label class="text-slate-500 font-medium">选择注册身份角色</label>
+            <select v-model="authForm.role" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 font-bold mt-1 outline-none">
+              <option value="employer">派单员 (发布代练需求)</option>
+              <option value="booster">打手 (接单赚赏金)</option>
+              <option value="admin">管理员 (后台打款结算与调账)</option>
             </select>
           </div>
-
-          <div v-if="authForm.role === 'admin'" class="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800">
-            * 注册管理员请输入专属密钥 `admin888`
-            <input v-model="authForm.adminKey" type="password" placeholder="输入密钥" class="w-full bg-white border border-amber-300 rounded p-1.5 mt-1 text-slate-800 outline-none">
-          </div>
-
-          <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2.5 rounded-xl transition shadow-md">
-            注册并激活此身份
-          </button>
+          <button type="submit" class="w-full bg-blue-600 text-white font-black py-2.5 rounded-xl shadow-md">注册并登录</button>
         </form>
       </div>
     </div>
@@ -449,10 +372,9 @@
       <button @click="switchTab('hall')" :class="['flex flex-col items-center justify-center gap-1 relative', activeTab === 'hall' ? 'text-blue-600 font-extrabold' : 'text-slate-400']">
         <i data-lucide="swords" class="w-5 h-5"></i>
         <span class="text-[10px]">接单大厅</span>
-        <span v-if="orders.length > 0" class="absolute top-1 right-5 bg-red-500 text-white text-[8px] font-bold px-1 rounded-full">{{ orders.length }}</span>
       </button>
 
-      <button @click="switchTab('msg')" :class="['flex flex-col items-center justify-center gap-1 relative', activeTab === 'msg' ? 'text-blue-600 font-extrabold' : 'text-slate-400']">
+      <button @click="switchTab('msg')" :class="['flex flex-col items-center justify-center gap-1', activeTab === 'msg' ? 'text-blue-600 font-extrabold' : 'text-slate-400']">
         <i data-lucide="bell" class="w-5 h-5"></i>
         <span class="text-[10px]">消息</span>
       </button>
@@ -466,7 +388,9 @@
   </div>
 
   <script>
+    const API_BASE = 'http://localhost:3000/api'; // 后端 API 根地址
     const { createApp, nextTick } = Vue;
+
     createApp({
       data() {
         return {
@@ -476,35 +400,9 @@
           searchKeyword: '',
           filterStatus: '',
           
-          // 默认内置演示用户 (包括派单员、打手与平台管理员)
-          users: [
-            { id: 101, username: '高级派单员-老张', role: 'employer', user_code: 'EMP801', balance: 5000.0, frozen_deposit: 0.0 },
-            { id: 102, username: '国服打手-阿杰', role: 'booster', user_code: 'BST902', balance: 800.0, frozen_deposit: 0.0 },
-            { id: 103, username: '平台总管理员', role: 'admin', user_code: 'ADM001', balance: 100000.0, frozen_deposit: 0.0 }
-          ],
-          currentUserId: 101,
-          currentUser: null,
-
-          // 核心订单数据列表（发布后全站大厅实时上架）
-          orders: [
-            {
-              id: 2001,
-              display_id: 'QW883921',
-              employer_id: 101,
-              employer_name: '高级派单员-老张',
-              booster_id: null,
-              booster_name: null,
-              title: '王者荣耀 荣耀王者50星 定位挑战',
-              game_name: '王者荣耀',
-              game_region: '安卓微信区',
-              time_limit: '24小时内完工',
-              description: '【指定英雄】主要使用打野位置：李白、韩信、云中君。\n【严禁禁忌】严禁动用背包内任何金币、钻石、抽奖券及铭文碎片！不可私自与好友聊天，保持隐身打练。',
-              bounty: 150.0,
-              deposit: 300.0,
-              status: 0, // 0: 待接单, 1: 代练中, 2: 待验收, 3: 待结算, 4: 已完成
-              proofImg: null
-            }
-          ],
+          currentUser: null, // 当前登录用户
+          userList: [],     // 管理员调账用户列表
+          orders: [],       // 全局订单列表
 
           form: {
             title: '',
@@ -515,7 +413,7 @@
             bounty: 100,
             deposit: 200
           },
-          authForm: { username: '', role: 'employer', adminKey: '' },
+          authForm: { username: '', password: '', role: 'employer' },
           
           statusOptions: [
             { label: '全部', value: '' },
@@ -525,16 +423,11 @@
             { label: '待结算', value: 3 },
             { label: '已完成', value: 4 }
           ],
-          
           gameCategories: [
-            { name: '王者荣耀', tag: '热门极速' },
+            { name: '王者荣耀', tag: '极速上分' },
             { name: '英雄联盟', tag: '端游竞技' },
             { name: '三角洲行动', tag: '热门战术' },
-            { name: '和平精英', tag: '吃鸡上分' }
-          ],
-          presetPackages: [
-            { id: 1, title: '王者荣耀 10星定制上分套餐', desc: '全平台资金担保 极速打手接单', price: 80, originPrice: 120 },
-            { id: 2, title: '英雄联盟 晋级赛代练上分', desc: '高胜率打手保过 平台严格监控', price: 120, originPrice: 180 }
+            { name: '和平精英', tag: '吃鸡代练' }
           ]
         }
       },
@@ -551,17 +444,17 @@
         }
       },
       mounted() {
-        this.fetchUserData();
+        this.loadOrders();
         this.renderIcons();
       },
       methods: {
         renderIcons() {
-          nextTick(() => {
-            if (window.lucide) { lucide.createIcons(); }
-          });
+          nextTick(() => { if (window.lucide) { lucide.createIcons(); } });
         },
         switchTab(tab) {
           this.activeTab = tab;
+          if (tab === 'hall') this.loadOrders();
+          if (tab === 'mine' && this.currentUser && this.currentUser.role === 'admin') this.loadAllUsers();
           this.renderIcons();
         },
         roleText(r) {
@@ -574,209 +467,176 @@
           return 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40';
         },
         statusText(s) { 
-          return ['待接单', '代练中', '待验收(已完工)', '待管理员结算', '已完成结算'][s] || '未知'; 
+          return ['待接单', '代练中', '待验收', '待结算', '已完成结算'][s] || '未知'; 
         },
         statusBadgeColor(s) {
-          return [
-            'bg-amber-100 text-amber-700', 
-            'bg-blue-100 text-blue-700', 
-            'bg-indigo-100 text-indigo-700', 
-            'bg-purple-100 text-purple-700',
-            'bg-emerald-100 text-emerald-700'
-          ][s];
+          return ['bg-amber-100 text-amber-700', 'bg-blue-100 text-blue-700', 'bg-indigo-100 text-indigo-700', 'bg-purple-100 text-purple-700', 'bg-emerald-100 text-emerald-700'][s];
         },
-        fetchUserData() {
-          this.currentUser = this.users.find(u => u.id === this.currentUserId);
-          this.renderIcons();
-        },
-        rechargeFunds() {
-          if (!this.currentUser) return;
-          const amt = prompt("请输入充值金额 (元)：", "500");
-          if (amt && !isNaN(amt)) {
-            this.currentUser.balance += Number(amt);
-            alert(`充值成功！当前余额：¥${this.currentUser.balance.toFixed(2)}`);
+
+        // API 加载订单
+        async loadOrders() {
+          try {
+            const res = await axios.get(`${API_BASE}/orders/list`);
+            this.orders = res.data;
+            this.renderIcons();
+          } catch (e) {
+            console.error("加载订单失败");
           }
         },
 
-        // 1. 正常发布订单流程
-        openPublishModal(preset = null) {
-          if (!this.currentUser || (this.currentUser.role !== 'employer' && this.currentUser.role !== 'admin')) {
-            alert("请在“我的”页面切换为【派单员】或【管理员】身份后再发布需求！");
-            return;
+        // 刷新个人资产信息
+        async refreshUserInfo() {
+          if (!this.currentUser) return;
+          try {
+            const res = await axios.get(`${API_BASE}/user/${this.currentUser.id}`);
+            this.currentUser = res.data;
+          } catch (e) {
+            console.error("更新用户信息失败");
           }
-          if (preset) {
-            this.form.title = preset.title;
-            this.form.bounty = preset.price;
-            this.form.deposit = preset.price * 2;
+        },
+
+        // 注册新账号 (初始金额 0)
+        async handleRegister() {
+          try {
+            const res = await axios.post(`${API_BASE}/register`, this.authForm);
+            this.currentUser = {
+              id: res.data.userId,
+              username: res.data.username,
+              role: res.data.role,
+              user_code: res.data.userCode,
+              balance: 0.00,
+              frozen_deposit: 0.00
+            };
+            this.showAuthModal = false;
+            alert(`注册成功！当前身份：【${this.roleText(this.currentUser.role)}】，账户可用余额为 ¥0.00`);
+            this.renderIcons();
+          } catch (e) {
+            alert(e.response?.data?.error || "注册失败");
+          }
+        },
+
+        // 发布订单
+        openPublishModal() {
+          if (!this.currentUser || (this.currentUser.role !== 'employer' && this.currentUser.role !== 'admin')) {
+            alert("请先注册/登录为【派单员】账户！");
+            return;
           }
           this.showPublishModal = true;
-          this.renderIcons();
         },
-        createCustomOrder() {
-          if (this.currentUser.balance < this.form.bounty) {
-            alert(`余额不足！发布此订单需要托管赏金 ¥${this.form.bounty}，当前余额 ¥${this.currentUser.balance}`);
-            return;
+        async createOrder() {
+          try {
+            await axios.post(`${API_BASE}/orders/create`, {
+              employerId: this.currentUser.id,
+              ...this.form
+            });
+            alert("发布成功！订单已实时上传大厅。");
+            this.showPublishModal = false;
+            this.refreshUserInfo();
+            this.switchTab('hall');
+          } catch (e) {
+            alert(e.response?.data?.error || "发布订单失败");
           }
-
-          // 扣除派单员托管赏金
-          this.currentUser.balance -= this.form.bounty;
-
-          const newOrder = {
-            id: Date.now(),
-            display_id: 'QW' + Math.floor(Math.random() * 899999 + 100000),
-            employer_id: this.currentUser.id,
-            employer_name: this.currentUser.username,
-            booster_id: null,
-            booster_name: null,
-            title: this.form.title,
-            game_name: this.form.gameName,
-            game_region: this.form.gameRegion,
-            time_limit: this.form.timeLimit,
-            description: this.form.description,
-            bounty: Number(this.form.bounty),
-            deposit: Number(this.form.deposit),
-            status: 0, // 0: 待接单
-            proofImg: null
-          };
-
-          this.orders.unshift(newOrder);
-          this.showPublishModal = false;
-          alert("订单发布成功！已实时上传并上架接单大厅。");
-          this.activeTab = 'hall';
-          this.renderIcons();
         },
+
+        // 打手抢单
+        async acceptOrder(order) {
+          try {
+            await axios.post(`${API_BASE}/orders/accept`, {
+              orderId: order.id,
+              boosterId: this.currentUser.id
+            });
+            alert("接单成功！保证金已被冻结。");
+            this.refreshUserInfo();
+            this.loadOrders();
+          } catch (e) {
+            alert(e.response?.data?.error || "抢单失败");
+          }
+        },
+
+        // 提交完工
+        async completeOrder(order) {
+          const proof = prompt("请输入完工服务说明或截图链接凭证：", "已按要求完工");
+          if (!proof) return;
+          try {
+            await axios.post(`${API_BASE}/orders/complete`, { orderId: order.id, proofImg: proof });
+            alert("完工凭证提交成功！等待派单员验收。");
+            this.loadOrders();
+          } catch (e) {
+            alert("提交失败");
+          }
+        },
+
+        // 派单员验收
+        async confirmOrder(order) {
+          if (!confirm("确认服务验收通过并提交给管理员进行打款结算吗？")) return;
+          try {
+            await axios.post(`${API_BASE}/orders/confirm`, { orderId: order.id, employerId: this.currentUser.id });
+            alert("验收成功！等待管理员进行打款。");
+            this.loadOrders();
+          } catch (e) {
+            alert("确认失败");
+          }
+        },
+
+        // 管理员打款结算
+        async adminSettleOrder(order) {
+          try {
+            await axios.post(`${API_BASE}/orders/admin-settle`, { orderId: order.id, adminId: this.currentUser.id });
+            alert("管理员结算完成！赏金已解冻打入打手账户。");
+            this.loadOrders();
+          } catch (e) {
+            alert(e.response?.data?.error || "结算失败");
+          }
+        },
+
+        // 管理员调账功能：读取所有用户列表
+        async loadAllUsers() {
+          try {
+            const res = await axios.get(`${API_BASE}/admin/users`);
+            this.userList = res.data;
+          } catch (e) {
+            console.error("无法加载用户列表");
+          }
+        },
+
+        // 管理员加钱 / 扣钱
+        async adjustUserBalance(targetUser, type) {
+          const actionText = type === 'add' ? '增加' : '扣除';
+          const amtStr = prompt(`请输入要对用户【${targetUser.username}】${actionText}的金额 (元)：`, "100");
+          if (!amtStr || isNaN(amtStr)) return;
+
+          try {
+            await axios.post(`${API_BASE}/admin/adjust-balance`, {
+              adminId: this.currentUser.id,
+              targetUserId: targetUser.id,
+              amount: Number(amtStr),
+              type: type
+            });
+            alert(`已成功对【${targetUser.username}】${actionText} ¥${amtStr}`);
+            this.loadAllUsers();
+            this.refreshUserInfo();
+          } catch (e) {
+            alert("调账失败");
+          }
+        },
+
+        // 管理员删除订单
+        async deleteOrder(orderId) {
+          if (!confirm("强制删除该订单？")) return;
+          try {
+            await axios.delete(`${API_BASE}/admin/order/${orderId}`);
+            alert("订单已删除");
+            this.loadOrders();
+          } catch (e) {
+            alert("删除失败");
+          }
+        },
+
         quickPublish(gameName) {
           this.form.gameName = gameName;
-          this.form.title = `${gameName} 段位定制提升需求`;
-          this.form.description = `【游戏类目】${gameName}\n【代练要求】请接单打手按照平台规范上号代练，严禁动用玩家道具与乱花金币，违者扣除保证金！`;
+          this.form.title = `${gameName} 段位提升代练服务`;
+          this.form.description = `【游戏】${gameName}\n【要求】按平台规范打练，不得私自动用玩家道具资源。`;
           this.openPublishModal();
-        },
-        publishPresetPackage(pkg) {
-          this.openPublishModal(pkg);
-        },
-
-        // 2. 打手接单 (扣保证金)
-        acceptOrder(order) {
-          if (this.currentUser.role !== 'booster') {
-            alert("只有【打手】身份可以进行抢单接单！");
-            return;
-          }
-          if (this.currentUser.balance < order.deposit) {
-            alert(`保证金余额不足！抢此单需扣除保证金 ¥${order.deposit}，您当前余额 ¥${this.currentUser.balance.toFixed(2)}，请先在“我的”页面充值！`);
-            return;
-          }
-
-          // 扣除打手保证金并记入冻结
-          this.currentUser.balance -= order.deposit;
-          this.currentUser.frozen_deposit += order.deposit;
-
-          order.booster_id = this.currentUser.id;
-          order.booster_name = this.currentUser.username;
-          order.status = 1; // 1: 代练中
-          alert(`接单成功！已从您的账户扣除并冻结保证金 ¥${order.deposit}`);
-          this.renderIcons();
-        },
-
-        // 3. 打手完成服务 (提交凭证)
-        completeOrder(order) {
-          const proof = prompt("请输入完工服务说明/截图链接凭证：", "王者荣耀星级完工截图凭证已上传");
-          if (!proof) return;
-          order.proofImg = proof;
-          order.status = 2; // 2: 待验收
-          alert("已提交完工凭证！订单状态更新为【待验收】，等待派单员验收确认。");
-          this.renderIcons();
-        },
-
-        // 4. 派单员确认订单
-        confirmOrder(order) {
-          if (confirm("请确认打手服务是否合格完毕？确认后订单将提交管理员进行最终资金结算打款。")) {
-            order.status = 3; // 3: 待结算
-            alert("派单员验收无误！订单已提交至【平台管理员】进行资金打款结算。");
-            this.renderIcons();
-          }
-        },
-
-        // 5. 管理员进行结算打款
-        adminSettleOrder(order) {
-          if (this.currentUser.role !== 'admin') {
-            alert("只有平台【管理员】才具备资金打款结算权限！");
-            return;
-          }
-
-          const booster = this.users.find(u => u.id === order.booster_id);
-          if (!booster) {
-            alert("未找到对应打手信息");
-            return;
-          }
-
-          // 资金打款结算逻辑：
-          // a. 退还打手保证金 (解冻)
-          booster.frozen_deposit -= order.deposit;
-          booster.balance += order.deposit;
-          // b. 将派单员托管的赏金正式发放给打手
-          booster.balance += order.bounty;
-
-          order.status = 4; // 4: 已完成
-          alert(`管理员结算完成！\n已将赏金 ¥${order.bounty} 发放给打手 [${booster.username}]，并归还解冻保证金 ¥${order.deposit}！`);
-          this.renderIcons();
-        },
-
-        // 管理员功能: 注册/账号切换
-        registerAccount() {
-          if (this.authForm.role === 'admin' && this.authForm.adminKey !== 'admin888') {
-            alert("管理员密钥错误！密码是：admin888");
-            return;
-          }
-          const newUser = {
-            id: Date.now(),
-            user_code: 'USR' + Math.floor(Math.random() * 899 + 100),
-            username: this.authForm.username,
-            role: this.authForm.role,
-            balance: 1000.0,
-            frozen_deposit: 0.0
-          };
-          this.users.push(newUser);
-          this.currentUserId = newUser.id;
-          this.currentUser = newUser;
-          this.showAuthModal = false;
-          alert(`切换成功！已激活身份：【${this.roleText(newUser.role)}】`);
-          this.renderIcons();
-        },
-        toggleEmployerBoosterRole() {
-          if (!this.currentUser) return;
-          if (this.currentUser.role === 'admin') {
-            alert("管理员拥有最高全局查看与结算权限");
-            return;
-          }
-          this.currentUser.role = this.currentUser.role === 'employer' ? 'booster' : 'employer';
-          alert(`已切换模式为：【${this.roleText(this.currentUser.role)}】`);
-          this.renderIcons();
-        },
-
-        // 管理员控制台逻辑
-        deleteOrder(orderId) {
-          if (confirm("管理员确定要强制删除该订单吗？")) {
-            this.orders = this.orders.filter(o => o.id !== orderId);
-            alert("删除成功");
-          }
-        },
-        editOrderDescriptionPrompt(order) {
-          const newDesc = prompt("修改该订单的详细要求描述：", order.description);
-          if (newDesc !== null) {
-            order.description = newDesc;
-            alert("修改成功");
-          }
-        },
-        addCategoryPrompt() {
-          const name = prompt("请输入新增的游戏类目名称（如：永劫无间）：");
-          if (!name) return;
-          const tag = prompt("请输入类目标签：", "热门");
-          this.gameCategories.push({ name, tag: tag || '推荐' });
-        },
-        removeCategory(idx) {
-          if (confirm("确定要删除该类目吗？")) {
-            this.gameCategories.splice(idx, 1);
-          }
         }
       }
     }).mount('#app');
