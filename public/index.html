@@ -155,7 +155,7 @@
       </div>
     </div>
 
-    <!-- Modal 1: 登录与注册弹窗 (已修复绑定逻辑) -->
+    <!-- Modal 1: 登录与注册弹窗 -->
     <div v-if="showAuthModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div class="bg-white border border-slate-200 w-full max-w-sm rounded-2xl p-5 space-y-3 shadow-2xl">
         <div class="flex justify-between items-center border-b pb-2">
@@ -166,28 +166,26 @@
           <button @click="showAuthModal = false" class="text-slate-400 font-bold text-lg">&times;</button>
         </div>
 
-        <!-- 登录表单 -->
         <form v-if="authMode === 'login'" @submit.prevent="handleLogin" class="space-y-3 text-xs">
           <div>
             <label class="text-slate-500 font-medium">账号名称</label>
-            <input v-model="authForm.username" placeholder="管理员默认账号: admin" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none text-slate-800 font-bold" required>
+            <input v-model="authForm.username" placeholder="管理员账号: admin" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none font-bold" required>
           </div>
           <div>
             <label class="text-slate-500 font-medium">密码</label>
-            <input v-model="authForm.password" type="password" placeholder="默认密码: admin123" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none text-slate-800 font-bold" required>
+            <input v-model="authForm.password" type="password" placeholder="默认密码: admin123" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none font-bold" required>
           </div>
           <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2.5 rounded-xl shadow transition">立即登录</button>
         </form>
 
-        <!-- 注册表单 -->
         <form v-else @submit.prevent="handleRegister" class="space-y-3 text-xs">
           <div>
             <label class="text-slate-500 font-medium">设置账号名称</label>
-            <input v-model="authForm.username" placeholder="输入要注册的账号" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none text-slate-800 font-bold" required>
+            <input v-model="authForm.username" placeholder="输入要注册的账号" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none font-bold" required>
           </div>
           <div>
             <label class="text-slate-500 font-medium">设置登录密码</label>
-            <input v-model="authForm.password" type="password" placeholder="输入登录密码" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none text-slate-800 font-bold" required>
+            <input v-model="authForm.password" type="password" placeholder="输入登录密码" class="w-full bg-slate-50 border rounded-lg p-2.5 mt-1 outline-none font-bold" required>
           </div>
           <div>
             <label class="text-slate-500 font-medium">选择账号身份角色</label>
@@ -199,7 +197,7 @@
           </div>
           <div v-if="authForm.role === 'admin'" class="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800">
             * 注册管理员密钥：
-            <input v-model="authForm.adminKey" type="password" placeholder="默认授权密钥: admin888" class="w-full bg-white border rounded p-1.5 mt-1 outline-none font-bold">
+            <input v-model="authForm.adminKey" type="password" placeholder="授权密钥: admin888" class="w-full bg-white border rounded p-1.5 mt-1 outline-none font-bold">
           </div>
           <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-2.5 rounded-xl shadow transition">确认注册</button>
         </form>
@@ -268,7 +266,7 @@
       </div>
     </div>
 
-    <!-- Navigation -->
+    <!-- Bottom Navigation -->
     <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 border-t backdrop-blur-lg grid grid-cols-3 py-2 z-40 text-center">
       <button @click="switchTab('publish')" :class="['flex flex-col items-center gap-1', activeTab === 'publish' ? 'text-blue-600 font-black' : 'text-slate-400']">
         <i data-lucide="gamepad-2" class="w-5 h-5"></i><span class="text-[10px]">发单</span>
@@ -284,7 +282,9 @@
   </div>
 
   <script>
-    const API_BASE = 'http://localhost:3000/api';
+    // 相对路径，同域 Cloudflare Pages / Worker 部署专用
+    const API_BASE = '/api'; 
+
     const { createApp, nextTick } = Vue;
 
     createApp({
@@ -355,7 +355,6 @@
           this.showToast('已退出账号登录');
         },
 
-        // 修复：登录逻辑处理
         async handleLogin() {
           try {
             const res = await axios.post(`${API_BASE}/login`, {
@@ -374,7 +373,6 @@
           }
         },
 
-        // 修复：注册逻辑处理
         async handleRegister() {
           try {
             const res = await axios.post(`${API_BASE}/register`, this.authForm);
