@@ -14,16 +14,16 @@
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen pb-20 select-none">
   <div id="app" class="max-w-md mx-auto relative min-h-screen bg-white shadow-xl border-x border-slate-200">
-    
+
     <!-- Header -->
     <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-30">
       <div>
         <h1 class="text-2xl font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">QW电竞派单平台</h1>
-        <p class="text-[10px] text-slate-400 font-medium">专业电竞派单服务</p>
+        <p class="text-[10px] text-slate-400 font-medium">专业电竞派单服务 · 外派版</p>
       </div>
       <div class="flex gap-2">
         <button v-if="!currentUser" @click="openAuthModal('login')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-full shadow transition">登录 / 注册</button>
-        <button v-else @click="currentUser = null" class="bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-full border">退出账号</button>
+        <button v-else @click="logout" class="bg-slate-100 text-slate-600 font-bold text-xs px-3 py-1.5 rounded-full border">退出账号</button>
       </div>
     </div>
 
@@ -63,6 +63,13 @@
         <button v-for="s in statusOptions" :key="s.value" @click="filterStatus = s.value" :class="['flex-1 py-1 rounded-lg font-bold text-center transition', filterStatus === s.value ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500']">{{ s.label }}</button>
       </div>
 
+      <!-- 打手接单状态提示 -->
+      <div v-if="currentUser && currentUser.role === 'booster'" class="rounded-xl p-3 text-xs font-bold flex items-center justify-between"
+           :class="currentUser.is_accepting ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-50 text-slate-500 border border-slate-200'">
+        <span>{{ currentUser.is_accepting ? '🟢 当前处于接单中状态，可抢单' : '⚪ 当前未开启接单，请到「我的」开启' }}</span>
+        <button v-if="!currentUser.is_accepting" @click="toggleAccepting" class="bg-emerald-500 text-white px-2.5 py-1 rounded-full text-[10px]">立即开启</button>
+      </div>
+
       <div class="space-y-3">
         <div v-if="filteredOrders.length === 0" class="text-center py-8 text-slate-400 text-xs">暂无符合条件的代练订单</div>
 
@@ -84,8 +91,13 @@
           </div>
 
           <!-- 操作流程按钮 -->
-          <div class="pt-1">
-            <button v-if="order.status === 0 && currentUser && currentUser.role === 'booster'" @click="acceptOrder(order)" class="w-full bg-emerald-500 text-white font-black py-2 rounded-xl text-xs">1. 立即接单 (冻结保证金 ¥{{ order.deposit }})</button>
+          <div class="pt-1 space-y-1.5">
+            <button v-if="order.status === 0 && currentUser && currentUser.role === 'booster'"
+                    @click="acceptOrder(order)"
+                    :disabled="!canAccept"
+                    :class="['w-full font-black py-2 rounded-xl text-xs', canAccept ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed']">
+              {{ canAccept ? '1. 立即接单 (冻结保证金 ¥' + order.deposit + ')' : '请先开启接单状态' }}
+            </button>
             <button v-if="order.status === 1 && currentUser && currentUser.id === order.booster_id" @click="completeOrder(order)" class="w-full bg-blue-600 text-white font-black py-2 rounded-xl text-xs">2. 提交完工凭证</button>
             <button v-if="order.status === 2 && currentUser && (currentUser.id === order.employer_id || currentUser.role === 'admin')" @click="confirmOrder(order)" class="w-full bg-amber-500 text-white font-black py-2 rounded-xl text-xs">3. 派单员验收无误 (等待管理员打款)</button>
             <button v-if="order.status === 3 && currentUser && currentUser.role === 'admin'" @click="adminSettleOrder(order)" class="w-full bg-purple-600 text-white font-black py-2 rounded-xl text-xs">4. 管理员一键打款结算 (赏金+退保证金)</button>
@@ -105,8 +117,24 @@
               <span v-if="currentUser" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30">{{ roleText(currentUser.role) }}</span>
             </h3>
             <p class="text-[10px] text-slate-400 font-mono mt-0.5">账号编号: {{ currentUser ? currentUser.user_code : '-' }}</p>
+            <p v-if="currentUser && currentUser.status === 'pending'" class="text-[10px] text-amber-300 mt-1">⏳ 账号待管理员审核，审核通过后方可接单</p>
+            <p v-if="currentUser && currentUser.status === 'banned'" class="text-[10px] text-red-300 mt-1">🚫 账号已被封禁</p>
           </div>
           <button v-if="!currentUser" @click="openAuthModal('login')" class="text-xs bg-blue-600 px-3 py-1.5 rounded-full font-bold">登录 / 注册</button>
+        </div>
+      </div>
+
+      <!-- 打手接单开关（参考主站） -->
+      <div v-if="currentUser && currentUser.role === 'booster' && currentUser.status === 'active'" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex justify-between items-center">
+          <div>
+            <span class="font-extrabold text-xs text-slate-800">接单状态</span>
+            <p class="text-[10px] text-slate-400 mt-0.5">开启后才能在接单大厅抢单</p>
+          </div>
+          <button @click="toggleAccepting"
+                  :class="['px-4 py-1.5 rounded-full text-xs font-black transition', currentUser.is_accepting ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600']">
+            {{ currentUser.is_accepting ? '🟢 接单中' : '⚪ 暂不接单' }}
+          </button>
         </div>
       </div>
 
@@ -124,16 +152,26 @@
           <h3 class="font-black text-xs text-purple-900">管理员特权控制台</h3>
           <button @click="loadAllUsers" class="text-[10px] text-purple-600 underline">刷新用户</button>
         </div>
-        <div class="space-y-1.5 max-h-48 overflow-y-auto">
+        <div class="space-y-1.5 max-h-64 overflow-y-auto">
           <div v-for="u in userList" :key="u.id" class="flex justify-between items-center bg-white p-2 rounded-lg border text-xs">
             <div>
               <span class="font-bold">{{ u.username }}</span>
               <span class="text-[10px] text-slate-400 ml-1">({{ roleText(u.role) }})</span>
+              <span v-if="u.status === 'pending'" class="ml-1 text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">待审核</span>
+              <span v-if="u.status === 'banned'" class="ml-1 text-[9px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">已封禁</span>
               <div class="text-[10px] text-red-500 font-bold">余额: ¥{{ Number(u.balance).toFixed(2) }}</div>
             </div>
-            <div class="flex gap-1">
-              <button @click="adjustUserBalance(u, 'add')" class="text-emerald-600 text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">+ 加余额</button>
-              <button @click="adjustUserBalance(u, 'reduce')" class="text-red-600 text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-200 font-bold">- 扣余额</button>
+            <div class="flex flex-col gap-1">
+              <div class="flex gap-1">
+                <button @click="adjustUserBalance(u, 'add')" class="text-emerald-600 text-[10px] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">+ 加余额</button>
+                <button @click="adjustUserBalance(u, 'reduce')" class="text-red-600 text-[10px] bg-red-50 px-2 py-0.5 rounded border border-red-200 font-bold">- 扣余额</button>
+              </div>
+              <div class="flex gap-1" v-if="u.role === 'booster' && u.status === 'pending'">
+                <button @click="approveUser(u)" class="text-blue-600 text-[10px] bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">通过审核</button>
+              </div>
+              <div class="flex gap-1" v-if="u.id !== 1 && u.status !== 'banned'">
+                <button @click="banUser(u)" class="text-slate-600 text-[10px] bg-slate-50 px-2 py-0.5 rounded border border-slate-200 font-bold">封禁</button>
+              </div>
             </div>
           </div>
         </div>
@@ -185,6 +223,9 @@
           <div v-if="authForm.role === 'admin'" class="p-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800">
             * 注册管理员需提供授权密钥：
             <input v-model="authForm.adminKey" type="password" placeholder="默认密钥: admin888" class="w-full bg-white border rounded p-1.5 mt-1 outline-none">
+          </div>
+          <div v-if="authForm.role === 'booster'" class="p-2 bg-blue-50 border border-blue-200 rounded-lg text-[11px] text-blue-800">
+            * 打手注册后需管理员审核通过才能登录接单
           </div>
           <button type="submit" class="w-full bg-blue-600 text-white font-black py-2.5 rounded-xl shadow">确认注册</button>
         </form>
@@ -244,12 +285,25 @@
           searchKeyword: '',
           filterStatus: '',
           currentUser: null,
+          token: localStorage.getItem('qw_waipai_token') || '',
           userList: [],
           orders: [],
           authForm: { username: '', password: '', role: 'employer', adminKey: '' },
           form: { title: '', gameName: '王者荣耀', gameRegion: '安卓微信', timeLimit: '24小时完工', description: '', bounty: 100, deposit: 200 },
-          statusOptions: [{ label: '全部', value: '' }, { label: '待接单', value: 0 }, { label: '代练中', value: 1 }, { label: '待验收', value: 2 }, { label: '待结算', value: 3 }, { label: '已完成', value: 4 }],
-          gameCategories: [{ name: '王者荣耀', tag: '极速上分' }, { name: '英雄联盟', tag: '端游竞技' }, { name: '三角洲行动', tag: '热门战术' }, { name: '和平精英', tag: '吃鸡代练' }]
+          statusOptions: [
+            { label: '全部', value: '' },
+            { label: '待接单', value: 0 },
+            { label: '代练中', value: 1 },
+            { label: '待验收', value: 2 },
+            { label: '待结算', value: 3 },
+            { label: '已完成', value: 4 }
+          ],
+          gameCategories: [
+            { name: '王者荣耀', tag: '极速上分' },
+            { name: '英雄联盟', tag: '端游竞技' },
+            { name: '三角洲行动', tag: '热门战术' },
+            { name: '和平精英', tag: '吃鸡代练' }
+          ]
         }
       },
       computed: {
@@ -257,12 +311,23 @@
           return this.orders.filter(o => {
             const matchStatus = this.filterStatus === '' || o.status === this.filterStatus;
             const kw = this.searchKeyword.trim().toLowerCase();
-            const matchKw = !kw || o.title.toLowerCase().includes(kw) || o.game_name.toLowerCase().includes(kw);
+            const matchKw = !kw || (o.title || '').toLowerCase().includes(kw) || (o.game_name || '').toLowerCase().includes(kw);
             return matchStatus && matchKw;
           });
+        },
+        canAccept() {
+          return this.currentUser
+            && this.currentUser.role === 'booster'
+            && this.currentUser.status === 'active'
+            && Number(this.currentUser.is_accepting) === 1;
         }
       },
       mounted() {
+        // 恢复登录状态
+        const saved = localStorage.getItem('qw_waipai_user');
+        if (saved) {
+          try { this.currentUser = JSON.parse(saved); } catch(e) {}
+        }
         this.loadOrders();
         this.renderIcons();
       },
@@ -272,64 +337,121 @@
           this.activeTab = tab;
           if (tab === 'hall') this.loadOrders();
           if (tab === 'mine' && this.currentUser && this.currentUser.role === 'admin') this.loadAllUsers();
+          if (tab === 'mine' && this.currentUser) this.refreshUserInfo();
           this.renderIcons();
         },
         roleText(r) { return { employer: '派单员', booster: '打手', admin: '管理员' }[r] || '游客'; },
         statusText(s) { return ['待接单', '代练中', '待验收', '待结算', '已完成'][s] || '未知'; },
-        statusBadgeColor(s) { return ['bg-amber-100 text-amber-700', 'bg-blue-100 text-blue-700', 'bg-indigo-100 text-indigo-700', 'bg-purple-100 text-purple-700', 'bg-emerald-100 text-emerald-700'][s]; },
+        statusBadgeColor(s) {
+          return ['bg-amber-100 text-amber-700', 'bg-blue-100 text-blue-700', 'bg-indigo-100 text-indigo-700', 'bg-purple-100 text-purple-700', 'bg-emerald-100 text-emerald-700'][s] || 'bg-slate-100 text-slate-500';
+        },
         openAuthModal(mode) { this.authMode = mode; this.showAuthModal = true; },
-        
+        logout() {
+          this.currentUser = null;
+          this.token = '';
+          localStorage.removeItem('qw_waipai_token');
+          localStorage.removeItem('qw_waipai_user');
+        },
+
         // 登录/注册
         async handleLogin() {
           try {
-            const res = await axios.post(`${API_BASE}/login`, { username: this.authForm.username, password: this.authForm.password });
+            const res = await axios.post(`${API_BASE}/login`, {
+              username: this.authForm.username,
+              password: this.authForm.password
+            });
             this.currentUser = res.data.user;
+            this.token = res.data.token || '';
+            localStorage.setItem('qw_waipai_token', this.token);
+            localStorage.setItem('qw_waipai_user', JSON.stringify(this.currentUser));
             this.showAuthModal = false;
             alert(`登录成功！欢迎回来，${this.currentUser.username}`);
             if (this.currentUser.role === 'admin') this.loadAllUsers();
             this.renderIcons();
-          } catch (e) { alert(e.response?.data?.error || "登录失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "登录失败");
+          }
         },
         async handleRegister() {
           try {
             const res = await axios.post(`${API_BASE}/register`, this.authForm);
-            this.currentUser = res.data.user;
+            const u = res.data.user;
+            if (u.role === 'booster' && u.status === 'pending') {
+              alert(res.data.message || '注册成功，请等待管理员审核后再登录接单');
+              this.showAuthModal = false;
+              this.authMode = 'login';
+              return;
+            }
+            this.currentUser = u;
+            this.token = res.data.token || '';
+            localStorage.setItem('qw_waipai_token', this.token);
+            localStorage.setItem('qw_waipai_user', JSON.stringify(this.currentUser));
             this.showAuthModal = false;
             alert(`注册成功！初始资金余额: ¥0.00`);
             this.renderIcons();
-          } catch (e) { alert(e.response?.data?.error || "注册失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "注册失败");
+          }
         },
 
         // API 订单数据
         async loadOrders() {
-          try { const res = await axios.get(`${API_BASE}/orders/list`); this.orders = res.data; this.renderIcons(); } catch (e) {}
+          try {
+            const res = await axios.get(`${API_BASE}/orders/list`);
+            this.orders = res.data || [];
+            this.renderIcons();
+          } catch (e) {}
         },
         async refreshUserInfo() {
           if (!this.currentUser) return;
-          try { const res = await axios.get(`${API_BASE}/user/${this.currentUser.id}`); this.currentUser = res.data; } catch (e) {}
+          try {
+            const res = await axios.get(`${API_BASE}/user/${this.currentUser.id}`);
+            this.currentUser = res.data;
+            localStorage.setItem('qw_waipai_user', JSON.stringify(this.currentUser));
+          } catch (e) {}
         },
-        
+
         // 业务逻辑
         openPublishModal() {
           if (!this.currentUser) return alert("请先注册/登录账号！");
+          if (this.currentUser.role === 'booster') return alert("打手账号不能发布订单，请使用派单员账号");
           this.showPublishModal = true;
         },
         async createOrder() {
           try {
-            await axios.post(`${API_BASE}/orders/create`, { employerId: this.currentUser.id, ...this.form });
+            await axios.post(`${API_BASE}/orders/create`, {
+              employerId: this.currentUser.id,
+              title: this.form.title,
+              gameName: this.form.gameName,
+              gameRegion: this.form.gameRegion,
+              timeLimit: this.form.timeLimit,
+              description: this.form.description,
+              bounty: this.form.bounty,
+              deposit: this.form.deposit
+            });
             alert("订单发布成功！");
             this.showPublishModal = false;
             this.loadOrders();
             this.switchTab('hall');
-          } catch (e) { alert("发布失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "发布失败");
+          }
         },
         async acceptOrder(order) {
+          if (!this.canAccept) {
+            return alert('请先在「我的」页面开启接单状态，并确保账号已通过审核');
+          }
           try {
-            await axios.post(`${API_BASE}/orders/accept`, { orderId: order.id, boosterId: this.currentUser.id });
+            await axios.post(`${API_BASE}/orders/accept`, {
+              orderId: order.id,
+              boosterId: this.currentUser.id
+            });
             alert("接单成功！已扣除并冻结保证金。");
             this.refreshUserInfo();
             this.loadOrders();
-          } catch (e) { alert(e.response?.data?.error || "抢单失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "抢单失败");
+          }
         },
         async completeOrder(order) {
           const proof = prompt("请输入完工证明说明：", "已打完目标段位");
@@ -338,7 +460,9 @@
             await axios.post(`${API_BASE}/orders/complete`, { orderId: order.id, proofImg: proof });
             alert("完工凭证已提交，等待派单员验收！");
             this.loadOrders();
-          } catch (e) { alert("提交失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "提交失败");
+          }
         },
         async confirmOrder(order) {
           if (!confirm("确认验收无误并提交平台打款？")) return;
@@ -346,29 +470,80 @@
             await axios.post(`${API_BASE}/orders/confirm`, { orderId: order.id });
             alert("验收成功！已提交管理员审核打款。");
             this.loadOrders();
-          } catch (e) { alert("操作失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "操作失败");
+          }
         },
         async adminSettleOrder(order) {
           try {
             await axios.post(`${API_BASE}/orders/admin-settle`, { orderId: order.id });
             alert("打款结算成功！资金已划入打手可用余额。");
             this.loadOrders();
-          } catch (e) { alert("结算失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "结算失败");
+          }
+        },
+
+        // 打手切换接单状态
+        async toggleAccepting() {
+          if (!this.currentUser || this.currentUser.role !== 'booster') return;
+          try {
+            const res = await axios.post(`${API_BASE}/user/toggle-accepting`, {
+              userId: this.currentUser.id
+            }, {
+              headers: this.token ? { Authorization: this.token } : {}
+            });
+            this.currentUser.is_accepting = res.data.is_accepting;
+            localStorage.setItem('qw_waipai_user', JSON.stringify(this.currentUser));
+            alert(res.data.message);
+            this.renderIcons();
+          } catch (e) {
+            alert(e.response?.data?.error || "切换失败");
+          }
         },
 
         // 管理员控制台
         async loadAllUsers() {
-          try { const res = await axios.get(`${API_BASE}/admin/users`); this.userList = res.data; } catch (e) {}
+          try {
+            const res = await axios.get(`${API_BASE}/admin/users`);
+            this.userList = res.data || [];
+          } catch (e) {}
         },
         async adjustUserBalance(targetUser, type) {
           const amt = prompt(`要对【${targetUser.username}】${type === 'add' ? '增加' : '扣除'}多少金额？`, "100");
           if (!amt || isNaN(amt)) return;
           try {
-            await axios.post(`${API_BASE}/admin/adjust-balance`, { targetUserId: targetUser.id, amount: Number(amt), type });
+            await axios.post(`${API_BASE}/admin/adjust-balance`, {
+              targetUserId: targetUser.id,
+              amount: Number(amt),
+              type
+            });
             alert("调账完成！");
             this.loadAllUsers();
             this.refreshUserInfo();
-          } catch (e) { alert("调账失败"); }
+          } catch (e) {
+            alert(e.response?.data?.error || "调账失败");
+          }
+        },
+        async approveUser(u) {
+          if (!confirm(`确认通过打手【${u.username}】的审核？`)) return;
+          try {
+            await axios.put(`${API_BASE}/admin/users/${u.id}/approve`);
+            alert("已通过审核");
+            this.loadAllUsers();
+          } catch (e) {
+            alert(e.response?.data?.error || "操作失败");
+          }
+        },
+        async banUser(u) {
+          if (!confirm(`确认封禁用户【${u.username}】？`)) return;
+          try {
+            await axios.put(`${API_BASE}/admin/users/${u.id}/ban`);
+            alert("已封禁");
+            this.loadAllUsers();
+          } catch (e) {
+            alert(e.response?.data?.error || "操作失败");
+          }
         },
         quickPublish(gameName) {
           this.form.gameName = gameName;
