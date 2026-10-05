@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QW电竞代练外派交易平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <div id="app" class="p-4 max-w-7xl mx-auto">
+    <header class="flex flex-col sm:flex-row justify-between items-center bg-slate-800 p-4 rounded-xl mb-6 border border-slate-700 gap-4">
+      <div class="text-xl font-bold text-amber-400">⚡ QW电竞代练外派交易平台 (Cloudflare 版)</div>
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2">
+          <span class="text-xs text-slate-400">切换身份:</span>
+          <select v-model="currentUserId" @change="fetchUserData" class="bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white focus:outline-none">
+            <option v-for="u in users" :key="u.id" :value="u.id">
+              {{ u.username }} ({{ u.role === 'employer' ? '老板' : '打手' }}) - Code: {{ u.user_code }}
+            </option>
+          </select>
+        </div>
+        <div v-if="currentUser" class="bg-slate-900 px-3 py-1.5 rounded-lg text-sm border border-slate-700">
+          <span>余额: <strong class="text-amber-400">{{ currentUser.red_diamonds }}</strong> 💎</span>
+          <span v-if="currentUser.role === 'booster'" class="ml-2 text-slate-400">| 冻结: <strong class="text-orange-400">{{ currentUser.frozen_diamonds }}</strong> 💎</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div v-if="currentUser && currentUser.role === 'employer'" class="bg-slate-800 p-5 rounded-xl border border-slate-700 h-fit">
+        <h2 class="text-lg font-bold mb-4 text-amber-400 border-b border-slate-700 pb-2">发布新代练需求</h2>
+        <form @submit.prevent="createOrder" class="space-y-3">
+          <div>
+            <label class="text-xs text-slate-400">订单标题</label>
+            <input v-model="form.title" placeholder="例如: 王者50星升70星" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400">游戏名称</label>
+            <input v-model="form.gameName" placeholder="例如: 王者荣耀" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400">游戏区服</label>
+            <input v-model="form.gameRegion" placeholder="例如: 微信大区 / 黑色玫瑰" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none">
+          </div>
+          <div>
+            <label class="text-xs text-slate-400">托管赏金 (红钻)</label>
+            <input v-model.number="form.bounty" type="number" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
+          </div>
+          <div>
+            <label class="text-xs text-slate-400">要求保证金 (红钻)</label>
+            <input v-model.number="form.deposit" type="number" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-sm mt-1 focus:border-amber-400 outline-none" required>
+          </div>
+          <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold p-2.5 rounded-lg transition mt-2">发布订单</button>
+        </form>
+      </div>
+
+      <div :class="currentUser && currentUser.role === 'employer' ? 'lg:col-span-3' : 'lg:col-span-4'">
+        <div class="flex flex-col sm:flex-row justify-between items-center mb-4 bg-slate-800 p-3 rounded-xl border border-slate-700 gap-3">
+          <div class="flex space-x-2">
+            <button v-for="s in statusOptions" :key="s.value" @click="setStatus(s.value)" :class="['px-3 py-1.5 rounded-lg text-xs font-bold transition', activeStatus === s.value ? 'bg-amber-500 text-slate-950' : 'bg-slate-700 text-slate-300 hover:bg-slate-600']">
+              {{ s.label }}
+            </button>
+          </div>
+          <button @click="fetchOrders" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-slate-600">🔄 刷新大厅</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div v-for="order in orders" :key="order.id" class="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col justify-between hover:border-slate-600 transition">
+            <div>
+              <div class="flex justify-between items-center text-xs text-slate-400 mb-2">
+                <span>单号: <strong class="text-amber-400 font-mono">{{ order.display_id }}</strong></span>
+                <span :class="['px-2 py-0.5 rounded font-bold', statusColor(order.status)]">{{ statusText(order.status) }}</span>
+              </div>
+              <h3 class="font-bold text-base mb-1 text-white">{{ order.title }}</h3>
+              <p class="text-xs text-slate-400 mb-3">游戏: {{ order.game_name }} {{ order.game_region ? '| ' + order.game_region : '' }}</p>
+              
+              <div class="grid grid-cols-2 gap-2 bg-slate-900 p-2.5 rounded-lg mb-3 text-center">
+                <div>
+                  <div class="text-[10px] text-slate-500">托管赏金</div>
+                  <div class="text-amber-400 font-bold text-sm">+{{ order.bounty }} 💎</div>
+                </div>
+                <div>
+                  <div class="text-[10px] text-slate-500">冻结保证金</div>
+                  <div class="text-orange-400 font-bold text-sm">-{{ order.deposit }} 💎</div>
+                </div>
+              </div>
+
+              <div class="text-xs text-slate-400 space-y-1 mb-3">
+                <div>发单老板: <span class="text-slate-200">{{ order.employer_name }}</span></div>
+                <div v-if="order.booster_name">接单打手: <span class="text-slate-200">{{ order.booster_name }}</span></div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-700">
+              <button v-if="order.status === 0 && currentUser && currentUser.role === 'booster'" @click="acceptOrder(order.id)" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded-lg text-sm transition">
+                ⚡ 立即抢单 (冻结 {{ order.deposit }} 💎 押金)
+              </button>
+              <button v-if="order.status === 1 && currentUser && currentUser.id === order.booster_id" @click="completeOrder(order.id)" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 rounded-lg text-sm transition">
+                提交完工凭证
+              </button>
+              <button v-if="order.status === 2 && currentUser && currentUser.id === order.employer_id" @click="confirmOrder(order.id)" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2 rounded-lg text-sm transition">
+                确认完工并结算
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          users: [], currentUserId: null, currentUser: null, orders: [], activeStatus: '',
+          form: { title: '', gameName: '', gameRegion: '', bounty: 200, deposit: 100 },
+          statusOptions: [
+            { label: '全部', value: '' }, { label: '待接单', value: 0 },
+            { label: '代练中', value: 1 }, { label: '待验收', value: 2 }, { label: '已完成', value: 3 }
+          ]
+        }
+      },
+      async mounted() {
+        await this.fetchUsers();
+        await this.fetchOrders();
+      },
+      methods: {
+        async fetchUsers() {
+          const res = await fetch('/api/users');
+          const json = await res.json();
+          this.users = json.data;
+          if (this.users.length && !this.currentUserId) {
+            this.currentUserId = this.users[0].id;
+            this.currentUser = this.users[0];
+          }
+        },
+        fetchUserData() {
+          this.currentUser = this.users.find(u => u.id === this.currentUserId);
+        },
+        async fetchOrders() {
+          const url = this.activeStatus !== '' ? `/api/orders?status=${this.activeStatus}` : '/api/orders';
+          const res = await fetch(url);
+          const json = await res.json();
+          this.orders = json.data;
+        },
+        setStatus(val) {
+          this.activeStatus = val;
+          this.fetchOrders();
+        },
+        async createOrder() {
+          const res = await fetch('/api/orders/create', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ employerId: this.currentUserId, ...this.form })
+          });
+          const json = await res.json();
+          if (json.success) {
+            alert(`发单成功！单号: ${json.data.displayId}`);
+            this.form.title = '';
+            await this.fetchUsers();
+            await this.fetchOrders();
+          } else alert(json.message);
+        },
+        async acceptOrder(orderId) {
+          const res = await fetch('/api/orders/accept', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ orderId, boosterId: this.currentUserId })
+          });
+          const json = await res.json();
+          if (json.success) {
+            alert(json.message);
+            await this.fetchUsers();
+            await this.fetchOrders();
+          } else alert(json.message);
+        },
+        async completeOrder(orderId) {
+          const res = await fetch('/api/orders/complete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ orderId, boosterId: this.currentUserId, proofImg: '完工截图凭证' })
+          });
+          const json = await res.json();
+          if (json.success) {
+            alert(json.message);
+            await this.fetchOrders();
+          }
+        },
+        async confirmOrder(orderId) {
+          const res = await fetch('/api/orders/confirm', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ orderId, employerId: this.currentUserId })
+          });
+          const json = await res.json();
+          if (json.success) {
+            alert("结算成功！赏金与保证金已自动打入打手可用余额");
+            await this.fetchUsers();
+            await this.fetchOrders();
+          }
+        },
+        statusText(s) { return ['待接单', '代练中', '待验收', '已完成', '维权中'][s] || '未知'; },
+        statusColor(s) {
+          return ['bg-amber-500/20 text-amber-400', 'bg-blue-500/20 text-blue-400', 'bg-indigo-500/20 text-indigo-400', 'bg-emerald-500/20 text-emerald-400', 'bg-red-500/20 text-red-400'][s];
+        }
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
