@@ -1,4 +1,4 @@
-// 6位 ID 混淆算法 (复用原算法)
+// 1. 6位 ID 混淆算法
 function generate6DigitID(orderPrimaryId) {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let hash = (orderPrimaryId * 9301 + 49297) % 233280;
@@ -10,29 +10,44 @@ function generate6DigitID(orderPrimaryId) {
   return result;
 }
 
-// 通用 JSON 响应函数
+// 2. 统一 JSON 响应辅助函数
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json;charset=UTF-8' }
+    headers: { 
+      'Content-Type': 'application/json;charset=UTF-8',
+      'Access-Control-Allow-Origin': '*'
+    }
   });
 }
 
+// 3. Cloudflare Pages Functions 标准入口
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
   const path = url.pathname;
   const method = request.method;
-  const db = env.DB; // 绑定 Cloudflare D1
+  const db = env.DB; // 绑定 Cloudflare D1 数据库
+
+  // 处理 CORS 预检请求
+  if (method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
+    });
+  }
 
   try {
-    // 1. GET /api/users
+    // 获取用户列表: GET /api/users
     if (path === '/api/users' && method === 'GET') {
       const { results } = await db.prepare("SELECT * FROM users").all();
       return jsonResponse({ success: true, data: results });
     }
 
-    // 2. GET /api/orders
+    // 获取订单大厅: GET /api/orders
     if (path === '/api/orders' && method === 'GET') {
       const status = url.searchParams.get('status');
       let sql = `
@@ -53,7 +68,7 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, data: results });
     }
 
-    // 3. POST /api/orders/create
+    // 发布代练订单: POST /api/orders/create
     if (path === '/api/orders/create' && method === 'POST') {
       const body = await request.json();
       const { employerId, title, gameName, gameRegion, accountInfo, bounty, deposit } = body;
@@ -63,7 +78,7 @@ export async function onRequest(context) {
         return jsonResponse({ success: false, message: "红钻余额不足，无法发布订单" }, 400);
       }
 
-      // Cloudflare D1 事务批量执行
+      // 插入订单记录
       const insertRes = await db.prepare(
         "INSERT INTO orders (display_id, title, game_name, game_region, account_info, bounty, deposit, status, employer_id) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)"
       ).bind('TEMP', title, gameName, gameRegion || '', accountInfo || '', bounty, deposit, employerId).run();
@@ -71,6 +86,7 @@ export async function onRequest(context) {
       const primaryId = insertRes.meta.last_row_id;
       const displayId = generate6DigitID(primaryId);
 
+      // 执行扣款与更新单号事务
       await db.batch([
         db.prepare("UPDATE users SET red_diamonds = red_diamonds - ? WHERE id = ?").bind(bounty, employerId),
         db.prepare("UPDATE orders SET display_id = ? WHERE id = ?").bind(displayId, primaryId)
@@ -79,7 +95,7 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, data: { displayId } });
     }
 
-    // 4. POST /api/orders/accept
+    // 打手抢单: POST /api/orders/accept
     if (path === '/api/orders/accept' && method === 'POST') {
       const { orderId, boosterId } = await request.json();
       const order = await db.prepare("SELECT * FROM orders WHERE id = ?").bind(orderId).first();
@@ -92,6 +108,7 @@ export async function onRequest(context) {
         return jsonResponse({ success: false, message: "红钻余额不足以缴纳保证金" }, 400);
       }
 
+      // 扣除红钻并冻结保证金
       await db.batch([
         db.prepare("UPDATE users SET red_diamonds = red_diamonds - ?, frozen_diamonds = frozen_diamonds + ? WHERE id = ?").bind(order.deposit, order.deposit, boosterId),
         db.prepare("UPDATE orders SET status = 1, booster_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(boosterId, orderId)
@@ -100,7 +117,7 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, message: "抢单成功！保证金已冻结" });
     }
 
-    // 5. POST /api/orders/complete
+    // 提交完工: POST /api/orders/complete
     if (path === '/api/orders/complete' && method === 'POST') {
       const { orderId, boosterId, proofImg } = await request.json();
       await db.prepare("UPDATE orders SET status = 2, proof_img = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND booster_id = ?")
@@ -108,7 +125,7 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, message: "已提交完工，等待验收" });
     }
 
-    // 6. POST /api/orders/confirm
+    // 确认结算: POST /api/orders/confirm
     if (path === '/api/orders/confirm' && method === 'POST') {
       const { orderId, employerId } = await request.json();
       const order = await db.prepare("SELECT * FROM orders WHERE id = ? AND employer_id = ?").bind(orderId, employerId).first();
@@ -117,6 +134,7 @@ export async function onRequest(context) {
         return jsonResponse({ success: false, message: "订单未处于待验收状态" }, 400);
       }
 
+      // 解冻押金并划转赏金
       await db.batch([
         db.prepare("UPDATE users SET frozen_diamonds = frozen_diamonds - ?, red_diamonds = red_diamonds + ? + ? WHERE id = ?").bind(order.deposit, order.deposit, order.bounty, order.booster_id),
         db.prepare("UPDATE orders SET status = 3, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(orderId)
@@ -125,7 +143,7 @@ export async function onRequest(context) {
       return jsonResponse({ success: true, message: "确认结算成功！赏金与保证金已打入打手账户" });
     }
 
-    return jsonResponse({ error: "API 接口不存在" }, 404);
+    return jsonResponse({ success: false, message: "接口未找到" }, 404);
   } catch (err) {
     return jsonResponse({ success: false, error: err.message }, 500);
   }
