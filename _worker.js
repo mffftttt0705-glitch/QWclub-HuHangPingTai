@@ -35,9 +35,24 @@ const USER_FIELDS = 'id, user_code, username, role, balance, frozen_deposit';
 const money = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN; };
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
 
-async function getMe(request, env) {
+// 签名密钥：优先用环境变量 JWT_SECRET；没设置时自动生成并保存在数据库里，无需手动配置
+let cachedSecret;
+async function getSecret(env) {
+  if (env.JWT_SECRET) return env.JWT_SECRET;
+  if (cachedSecret) return cachedSecret;
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS app_settings (k TEXT PRIMARY KEY, v TEXT NOT NULL)').run();
+  const q = () => env.DB.prepare("SELECT v FROM app_settings WHERE k = 'jwt_secret'").first();
+  let row = await q();
+  if (!row) {
+    await env.DB.prepare("INSERT OR IGNORE INTO app_settings (k, v) VALUES ('jwt_secret', ?)").bind(b64u(crypto.getRandomValues(new Uint8Array(32)))).run();
+    row = await q();
+  }
+  return (cachedSecret = row.v);
+}
+
+async function getMe(request, env, secret) {
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-  const p = await verifyToken(token, env.JWT_SECRET);
+  const p = await verifyToken(token, secret);
   if (!p) return null;
   return await env.DB.prepare(`SELECT ${USER_FIELDS} FROM users WHERE id = ?`).bind(p.uid).first();
 }
@@ -51,7 +66,7 @@ export default {
     // 非 /api 请求交给静态资源(public/index.html)
     if (!path.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
     if (path === '/api/health') { // 部署自检: 浏览器直接打开 /api/health 查看
-      const h = { worker: true, db: !!env.DB, jwt: !!env.JWT_SECRET, adminKey: !!env.ADMIN_KEY, schema: 'ok' };
+      const h = { worker: true, db: !!env.DB, jwt: env.JWT_SECRET ? 'env' : 'auto', adminKey: !!env.ADMIN_KEY, schema: 'ok' };
       if (env.DB) {
         try {
           await env.DB.prepare('SELECT id, user_code, username, password_hash, role, balance, frozen_deposit FROM users LIMIT 1').all();
@@ -61,7 +76,7 @@ export default {
       return json(h);
     }
     if (!env.DB) return err('服务器未绑定 D1 数据库(变量名需为 DB)', 500);
-    if (!env.JWT_SECRET) return err('服务器未配置 JWT_SECRET', 500);
+    const secret = await getSecret(env);
 
     try {
       const b = method === 'POST' ? await request.json().catch(() => ({})) : {};
@@ -76,7 +91,7 @@ export default {
           await env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?').bind(await hashPassword(password), row.id).run();
         }
         const { password_hash, ...user } = row;
-        return json({ success: true, user, token: await signToken({ uid: user.id }, env.JWT_SECRET) });
+        return json({ success: true, user, token: await signToken({ uid: user.id }, secret) });
       }
 
       if (path === '/api/register' && method === 'POST') {
@@ -84,7 +99,10 @@ export default {
         if (!/^[\w\u4e00-\u9fa5]{3,20}$/.test(username)) return err('账号名需为3-20位字母、数字、下划线或中文');
         if (password.length < 6) return err('密码至少6位');
         if (!['employer', 'booster', 'admin'].includes(role)) return err('角色不合法');
-        if (role === 'admin' && (!env.ADMIN_KEY || !safeEq(String(b.adminKey || ''), env.ADMIN_KEY))) return err('管理员注册授权密钥不正确！');
+        if (role === 'admin') {
+          if (env.ADMIN_KEY) { if (!safeEq(String(b.adminKey || ''), env.ADMIN_KEY)) return err('管理员注册授权密钥不正确！'); }
+          else if (await env.DB.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").first()) return err('已存在管理员；再注册管理员需要先设置 ADMIN_KEY');
+        }
         if (await env.DB.prepare('SELECT id FROM users WHERE username = ?').bind(username).first()) return err('该账号名称已被注册，请更换名称');
 
         const prefix = role === 'admin' ? 'ADM' : role === 'employer' ? 'EMP' : 'BST';
@@ -98,10 +116,10 @@ export default {
           } catch (e) { if (i === 2) throw e; }
         }
         const user = { id: result.meta.last_row_id, user_code: userCode, username, role, balance: 0, frozen_deposit: 0 };
-        return json({ success: true, user, token: await signToken({ uid: user.id }, env.JWT_SECRET) });
+        return json({ success: true, user, token: await signToken({ uid: user.id }, secret) });
       }
 
-      const me = await getMe(request, env);
+      const me = await getMe(request, env, secret);
 
       if (path === '/api/orders/list' && method === 'GET') {
         const { results } = await env.DB.prepare('SELECT * FROM orders ORDER BY id DESC LIMIT 200').all();
