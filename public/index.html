@@ -4,10 +4,32 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>QW电竞外派 - 专业代练外派担保平台</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/vue@3.4.38/dist/vue.global.js"></script>
-  <script src="https://unpkg.com/axios@1.7.7/dist/axios.min.js"></script>
-  <script src="https://unpkg.com/lucide@0.441.0"></script>
+  <script>
+    // 依次尝试多个 CDN，任何一个被墙/超时都会自动切换下一个
+    function loadScript(urls, timeout) {
+      return new Promise(function (resolve) {
+        var i = 0;
+        (function next() {
+          if (i >= urls.length) return resolve(false);
+          var s = document.createElement('script'), done = false;
+          var fail = function () { if (done) return; done = true; s.remove(); next(); };
+          s.src = urls[i++];
+          s.onload = function () { if (done) return; done = true; resolve(true); };
+          s.onerror = fail;
+          setTimeout(fail, timeout || 8000);
+          document.head.appendChild(s);
+        })();
+      });
+    }
+    function loadLibs() {
+      loadScript(['https://cdn.tailwindcss.com', 'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4']);
+      loadScript(['https://cdn.jsdelivr.net/npm/lucide@0.441.0/dist/umd/lucide.min.js', 'https://cdn.bootcdn.net/ajax/libs/lucide/0.441.0/lucide.min.js', 'https://unpkg.com/lucide@0.441.0']);
+      return Promise.all([
+        loadScript(['https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js', 'https://fastly.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js', 'https://cdn.bootcdn.net/ajax/libs/vue/3.4.38/vue.global.prod.min.js', 'https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js']),
+        loadScript(['https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js', 'https://fastly.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js', 'https://cdn.bootcdn.net/ajax/libs/axios/1.7.7/axios.min.js', 'https://unpkg.com/axios@1.7.7/dist/axios.min.js'])
+      ]);
+    }
+  </script>
   <style>
     body { -webkit-tap-highlight-color: transparent; }
     .fade-enter-active, .fade-leave-active { transition: opacity 0.25s ease; }
@@ -282,6 +304,11 @@
   </div>
 
   <script>
+    async function boot() {
+    if (!window.Vue || !window.axios) {
+      document.getElementById('app').innerHTML = '<div style="padding:24px;text-align:center;font-size:14px">资源加载失败，请检查网络后刷新页面重试</div>';
+      return;
+    }
     // 相对路径，同域 Cloudflare Pages / Worker 部署专用
     const API_BASE = '/api';
     const TOKEN_KEY = 'qw_token';
@@ -501,6 +528,8 @@
         }
       }
     }).mount('#app');
+    }
+    loadLibs().then(boot);
   </script>
 </body>
 </html>
